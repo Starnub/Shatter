@@ -1,69 +1,94 @@
-# Shatter: hand-off for the cloud session
+# Shatter: hand-off (read this first, then act)
 
-Read `CLAUDE.md` and `Docs/PLAN.md` first. This file is the current state and how to work across the Linux cloud container and the user's Windows PC.
+## 0. Budget rules (most important)
+The user has about **$17 of usage left** and wants **at least a playable demo**. Every token counts:
+- **No subagents, no web research, no codebase exploration.** Everything needed is in this file. Open a file only to edit it; `grep -n` for the exact spot first.
+- Don't read `Docs/PLAN.md` (long-term vision). The demo scope in section 6 overrides it.
+- **One remote command per step**: `Tools\build.ps1` and `Tools\shot.ps1` (section 3). View small JPG previews (480-960 px), never 4K PNGs.
+- Don't poll repeatedly. If you must wait, use one `start_process` running a PowerShell wait loop (≤ 55 s).
+- Don't download DXC into the cloud container. The PC build compiles shaders in about 10 s and reports errors.
+- Batch edits: write a whole feature, then build once. Fix all reported errors in one pass.
+- Keep chat replies short. Commit and push after each working step (the cloud container is ephemeral).
 
-## State (branch `claude/vigilant-noether-3kj2qi`)
-- **M0 is done except the user's HDR check, which they confirmed looks good.** RTXPT v.1.8.1 is merged in; Donut is vendored (edits marked `// SHATTER:`).
-- Streamline 2.14.1, Agility SDK 1.619, DXC 1.9.2602.17. High-performance adapter forced. HDR10 swapchain + GT7 tone mapper (`Game/Shaders/HdrOutput.hlsl`, pass in `Game/Hdr/`). Dynamic MFG in the frame-gen dropdown.
-- Automation (`Game/Automation/`): `--bench`, `--camera`, `--screenshot`, `--frame`, `--fg` (see `Rtxpt/SampleCommon/CommandLine.cpp`). Bench JSON and screenshots go to `Tools/out/` (gitignored).
-- Baseline (kitchen, 3840x2141 window, DLSS-RR, internal 2227x1242): 125 fps with FG off; 4x FG measured multiplier 4.0 at ~100 base fps. PathTrace 4.06 ms, DLSS 2.56 ms, FinalOutput 0.08 ms. Process VRAM 5.8 GB.
+## 1. Setup
+- **Repo** `starnub/shatter`, branch `claude/vigilant-noether-3kj2qi`. The cloud session edits in `/home/user/Shatter`, commits and pushes. The PC pulls and builds.
+- **PC**: Windows 11, RTX 5090 32 GB, 9800X3D, LG C2 42" (HDR, 4K 120 Hz). Clone at `C:\dev\Shatter`, build dir `build\`, exe `bin\Rtxpt.exe`.
+- **Remote access**: Desktop Commander MCP, tools `mcp__Remote_Desktop_Commander__*` (load with ToolSearch: `select:mcp__Remote_Desktop_Commander__start_process,mcp__Remote_Desktop_Commander__read_file,mcp__Remote_Desktop_Commander__read_process_output,mcp__Remote_Desktop_Commander__list_directory`). Device "Starnub". Use `shell: "powershell.exe"`.
+  - If calls time out or the device is offline: ask the user to run `npx.cmd @wonderwhy-er/desktop-commander@latest remote` in PowerShell and keep that window open.
+  - `read_process_output` often returns immediately. Check results with `read_file` / `list_directory` instead.
+  - Commands that kill processes by command line must exclude themselves (`$_.ProcessId -ne $PID`), or they kill their own shell.
+- The session's permission mode is Auto. A session can't grant itself permissions, so some calls may prompt the user.
 
-## What the cloud container cannot do
-It is Linux. It cannot build (MSVC, D3D12, Streamline are Windows-only), run the app, take screenshots, or measure anything. So:
-- Write code, HLSL and docs there; keep changes small and reviewable; commit and push to the branch.
-- **Never claim a build, visual or performance result.** Anything that needs the PC goes back to the user, who runs it (or asks the local Windows session) and reports the output.
+## 2. State (commit `363758c` and later)
+- **Engine**: NVIDIA RTXPT 1.8.1 path tracer merged at the repo root (D3D12; DLSS 4.5 SR/RR/FG/Dynamic MFG via Streamline 2.14.1; Agility SDK 1.619, SM 6.9). Engine edits are marked `// SHATTER:`.
+- **M0 (done)**: HDR10 output with the GT7 tone mapper (`Game/Hdr/`, `Game/Shaders/HdrOutput.hlsl`); automation (`Game/Automation/`: `--bench`, `--screenshot`, named camera presets in `Game/camera_presets.json`).
+- **M1 (done, measured)**: point clouds in `Game/Points/` (C++) and `Game/Shaders/Points/` (HLSL).
+  - Generation: a CPU density grid (`CloudDensity.cpp`, FastNoiseLite noise-warped Gaussian with a spherical falloff) becomes Morton cell offsets. `PointGenerate.hlsl` then writes 4096-point batches at 4 bytes per point (11/11/10 bits inside each batch AABB), scattered with a quadratic B-spline kernel. There's a 1-bit "collected" mask per point (`Cloud::collected`, zeroed, not used yet).
+  - Per frame: `PointCull.hlsl` (frustum test + LOD cap, indirect args) → `PointRaster.hlsl` (additive; int64 fixed point with stochastic rounding into a display-res `uint64` buffer; depth test against the render-res depth) → `PointComposite.hlsl` (adds into `ProcessedOutputColor` before bloom and tonemap).
+  - Hook: `Rtxpt/Sample.cpp`, right after the `DLSS_SR_RR` profiler block (grep `SHATTER: diamond-dust`). Clouds are generated on the first frame: a row of 4 clouds 3 m in front of the camera, 1B points total.
+  - Settings: `shatter::PointSettings` (`PointCloudSystem.h`), stored in `m_ui.Points`, with a UI panel "Shatter: points" in `Rtxpt/SampleUI.cpp`.
+  - Shading is a placeholder: tint × random brightness ÷ d².
+  - Perf at 4K on the 5090: raster about 72 G points/s (1B points per frame takes 14.4 ms), cull 0.03 ms, composite 0.13 ms, PathTrace about 3.8 ms. 4B points fit in VRAM (15.4 GB).
 
-## Windows checks (the user or the local session runs these)
-```
-cmake -S . -B build
-cmake --build build --config Release --parallel
-bin\Rtxpt.exe --scene kitchen.scene.json --width 3840 --height 2160 --camera default --bench 15
-bin\Rtxpt.exe --scene kitchen.scene.json --camera default --screenshot Tools\out\shot.png --frame 64
-```
-Compare bench JSON before and after every perf change (CLAUDE.md).
+## 3. Commands (on the PC, in `C:\dev\Shatter`)
+- **Build**: `powershell -ExecutionPolicy Bypass -File Tools\build.ps1` pulls, builds Release, and prints only errors plus `BUILD EXIT n`. Add `-Configure` after adding or removing source files (`Game/` globs its sources).
+- **Screenshot**: `powershell -ExecutionPolicy Bypass -File Tools\shot.ps1 -Name x` writes `Tools\out\shot\x.jpg` (960 px). Options:
+  - `-Scene bistro-programmer-art.scene.json -NoCamera` for a different scene with its own camera
+  - `-Extra "--pointsM 250"` to pass extra app flags
+  - `-Crop "x,y,w,h"` to also write a 1:1 crop PNG
+  - `-PreviewWidth 480` for a smaller preview
+- **Play** (the user): `bin\Rtxpt.exe --scene bistro-programmer-art.scene.json`
+- **App flags**:
+  - `--noPoints --pointsM N --pointClouds N --pointAtomic 0|1 --pointLod 0|1 --pointAgg 0|1 --pointPpp X --pointGrid N`
+  - `--fg N` (0 = frame generation off), `--camera <preset>`, `--bench <s> --benchOut <json>`, `--debug` (D3D12 + NVRHI validation), `--nonInteractive`
+- **Logs** go only to OutputDebugString. `Tools\m1_checks.ps1` shows how to capture them with DebugView. Avoid unless something crashes.
+- **Scenes** in `Assets\`:
+  - `bistro-programmer-art` (outdoor street at night, recommended for the demo)
+  - `kitchen` (camera preset `default`)
+  - `transparent-machines` (glass)
+  - `programmer-art(-proc-sky)`, `living-room`
 
-## Known issues
-- Windows reports a 7600-nit peak for the C2; `HdrSettings::EffectivePeakNits()` falls back to 700 outside 250..1500. The in-game override exists.
-- The ImGui menu draws straight into the PQ signal (not remapped for HDR). User says it is fine for now.
-- Presented fps with frame generation is an estimate (base fps x Streamline multiplier), not measured on the display. Dynamic MFG generates nothing when base fps already exceeds the 120 Hz target.
-- DLSS DLLs are file version 310.9.1; not confirmed to be the 4.5 model.
+## 4. Pitfalls already paid for (don't re-learn)
+- **NVRHI barriers**: automatic barriers are only placed when the bound binding set changes. Two dispatches that share a binding set need `commandList->setBufferState(buf, nvrhi::ResourceStates::UnorderedAccess); commandList->commitBarriers();` between them. Missing this caused the flashing bug.
+- For atomic-only passes, disable UAV barriers with `setEnableUavBarriersForBuffer/Texture(x, false)` and re-enable afterwards (already done for the accumulation and stats buffers).
+- **Volatile constant buffers**: call `writeBuffer` before each dispatch that needs different constants (`maxVersions` is 256).
+- **Shaders**: add them to `Game/shaders.cfg`. Load with `m_shaderFactory->CreateShader("shatter/Shaders/<path>.hlsl", "<entry>", &defines, desc)`. Permutations use `-D NAME={0,1}`. Start each file with `#pragma pack_matrix(row_major)` and use `mul(float4(p,1), M)`. SM 6.9 (int64 atomics, `WaveMatch`, `[WaveSize(32)]`). D3D12 only.
+- **Random numbers**: give every random quantity its own `PcgHash(h ^ CONSTANT)` stream. Reusing one stream for two quantities caused banding.
+- **Projection**: reverse-Z with an infinite far plane. The render-res `Depth` texture holds NDC z (0 = sky); linear depth = `zNear / z`. Points use `GetViewProjectionMatrix(false)` (no jitter).
+- RTXPT pauses rendering when its window is unfocused. Automation runs override this (`Sample::ShouldRenderUnfocused`). Automation exits with `TerminateProcess` (`std::exit` teardown crashed).
+- Known and harmless: `--debug` reports 2 NVRHI validation errors from RTXPT's own graphics passes.
 
-## M1: point system v0 (written in the cloud, not yet built or run)
-Code: `Game/Points/` (C++), `Game/Shaders/Points/` (HLSL, compiled by `Game/shaders.cfg`), hook in `Rtxpt/Sample.cpp` right after `DLSS_SR_RR` (marked SHATTER), UI panel "Shatter: points", CLI flags in `Rtxpt/SampleCommon/CommandLine.cpp`.
-- **Generation** (`CloudDensity.cpp` + `PointGenerate.hlsl`): the CPU evaluates a noise-warped Gaussian density on a Morton-ordered grid (FastNoiseLite, MIT, vendored in `Game/ThirdParty`) and turns it into per-cell point offsets. The GPU then generates each 4096-point batch from those offsets. No billion-point sort is needed, batches are spatially coherent, and storage order is permuted inside a batch, so any prefix is a uniform subsample. Points are 4 bytes (11/11/10 bits in the batch AABB, dithered on decode). Clouds are capped at 512M points each (2 GB buffers); default 1B points in 4 clouds placed in a row in front of the camera on the first frame.
-- **Per frame**: per-cloud batch cull (8-corner frustum test, screen-footprint LOD capped at N points per pixel with energy compensation) → indirect raster (one workgroup per batch, additive) → one composite into `ProcessedOutputColor` before bloom/tonemap. GPU passes `Points_Cull`, `Points_Raster`, `Points_Composite` show up in bench JSON; `points.*` holds counts, VRAM and generation times.
-- **Accumulation modes**: int64 `InterlockedAdd` with 21/21/22-bit fixed point and stochastic rounding (default), or NVAPI `NvInterlockedAddFp16x4` into RGBA16F. Optional wave pre-aggregation (`WaveMatch` + `WaveMultiPrefixSum`) for batches that are small on screen.
-- **Built and measured on the 5090** (commit c8af66b, kitchen, default camera, 3840x2141 window, DLSS-RR, FG off, `Tools/bench_points.ps1`):
+## 5. Key code locations
+| What | Where |
+|---|---|
+| Point system C++ | `Game/Points/PointCloudSystem.{h,cpp}`, `Game/Points/CloudDensity.{h,cpp}` |
+| Shared C++/HLSL structs | `Game/Shaders/Points/PointShared.h` (`PointBatch`, `PointFrameConstants`), helpers in `PointCommon.hlsli` |
+| Frame hook, input, camera | `Rtxpt/Sample.cpp`: `Render()` (grep `SHATTER`), `KeyboardUpdate`, `MousePosUpdate`/`MouseButtonUpdate`, `m_camera` (Donut `FirstPersonCamera`) |
+| UI | `Rtxpt/SampleUI.cpp` (grep `Shatter: points`); UI data struct `SampleUIData` in `Rtxpt/SampleUI.h` |
+| CLI flags | `Rtxpt/SampleCommon/CommandLine.{h,cpp}` (grep `SHATTER`), applied once in `Sample::Render` where `m_automation` is created |
 
-| run | points total | rendered/frame | raster ms | throughput | frame ms |
-|---|---|---|---|---|---|
-| raw (no LOD), int64 | 250M | 133M | 1.94 | 69 G/s | 9.7 |
-| raw, int64 | 500M | 264M | 3.75 | 70 G/s | 11.4 |
-| raw, int64 | 1B | 525M | 7.23 | 73 G/s | 14.9 |
-| raw, int64 | 2B | 1.04B | 14.4 | 72 G/s | 22.2 |
-| raw, int64, no wave aggregation | 1B | 525M | 7.24 | 72 G/s | 14.9 |
-| raw, NVAPI fp16x4 | 1B | 525M | 13.7 | 38 G/s | 21.8 |
-| LOD 16 ppp, int64 | 4B (15.4 GB) | 1.04B | 14.4 | 72 G/s | 22.3 |
+## 6. Demo scope (in order; stop when the budget runs low)
+Goal: launch, then fly or walk around the bistro street full of glittering clouds. Hold a button to vacuum points, which stream into you while a counter goes up. Clouds can respawn.
 
-  Cull 0.02-0.06 ms, composite 0.13 ms, PathTrace ~3.8 ms. Generation: 36 ms GPU + 0.65 s CPU for 4B points.
-  - **int64 fixed point wins** (1.9x faster than fp16x4) and stays the default.
-  - Wave aggregation makes no difference in this view (batches are rarely small on screen this close); revisit with distant clouds.
-  - The LOD cap barely bites up close: the AABB screen rectangle overestimates a batch's footprint. Tighten in M2.
-  - Throughput scales linearly, so at ~72 G/s the 4-6 ms point budget (PLAN 2) means about 300-430M rasterized points per frame at 4K. LOD has to keep it there.
-- **Bugs found on hardware and fixed**: missing UAV barrier between cull and finalize (NVRHI skips automatic barriers when the binding set doesn't change), which drew a random subset of batches each frame (visible flashing); `std::exit` teardown crashing at the end of automation runs (now `TerminateProcess` after results are written); RTXPT pausing rendering when unfocused, which stalled automation runs; vertical and horizontal bands in the clouds. The bands came from scattering each density cell's points uniformly over a 2-cell box, which sums to a staircase density. Generation now uses a quadratic B-spline kernel, and per-point hashes no longer share streams (brightness was correlated with the y dither).
-- Known: `--debug` shows two NVRHI validation errors from existing graphics passes (framebuffer format mismatch in `setGraphicsState`, `drawIndirect` without indirect params). Not from the point system; still to track down.
-- Known M1 limits: placeholder shading (M2 does glints); points have no motion vectors yet, so frame generation will ghost them; the depth test uses the render-resolution jittered depth (edge shimmer possible); Hi-Z occlusion deferred to M3; generation is synchronous on the first frame.
+1. **D1 Controls**: RTXPT already has a fly camera (Donut `FirstPersonCamera`). Add a "game mode" toggle (e.g. Tab):
+   - Mouse-look without holding a button (`glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED)`; the window is `GetDeviceManager()->GetWindow()`)
+   - ImGui UI hidden
+   - Walking-pace move speed
 
-### Windows checks for M1 (run from the repo root)
-```
-cmake -S . -B build                                   # re-run: new source files are globbed
-cmake --build build --config Release --parallel
-bin\Rtxpt.exe --scene kitchen.scene.json --camera default --debug --bench 5 --pointsM 100
-     # D3D12 debug layer + NVRHI validation: any errors/warnings mentioning Point* in the log?
-bin\Rtxpt.exe --scene kitchen.scene.json --width 3840 --height 2160 --camera default --fg 0 --screenshot Tools\out\points.png --frame 64
-powershell -ExecutionPolicy Bypass -File Tools\bench_points.ps1     # full sweep (about 2 min); -Quick for 3 runs
-```
-Then check visually: clouds in front of the default camera, hidden correctly behind kitchen geometry, no grid or lattice patterns, and int64 vs fp16x4 look the same.
+   Check the existing bindings in `KeyboardUpdate` first to avoid conflicts. Default to game mode on.
+2. **D2 Vacuum**: a new `PointVacuum.hlsl`, one workgroup per batch (reuse each cloud's visible list or all batches).
+   - Points within about 4 m and about 20° of the camera's forward axis are captured with some probability per frame.
+   - On capture: `InterlockedOr` the collected bit (bind `collected` as a UAV here), append to a particle buffer (position, velocity, seed; cap 2M; atomic counter), and add to a global collected counter (`uint64`, read back like the existing stats ring).
+   - A particle pass updates particles toward a nozzle (camera pos + forward × 0.4 − up × 0.15) with some swirl, removes them on arrival, and rasterizes them into the same int64 accumulation buffer before composite.
+   - Input: hold the right mouse button (or E).
+3. **D3 HUD**: a minimal ImGui overlay showing the collected count, visible in game mode.
+4. **D4 Glints (cheap version of M2, big visual payoff)**: in `PointRaster.hlsl`, replace the placeholder shading.
+   - Per-point random unit normal (hash), a fixed sun or light direction, and the view direction.
+   - `glint = pow(saturate(dot(n, normalize(L + V))), ~1000-3000)` × a strong intensity, with a spectral hue per point (hash or angle based).
+   - Keep a dim base scatter so the cloud body stays visible.
+5. **D5 Respawn**: the R key sets `m_ui.Points.regenerate = true`.
+6. **D6 (optional)**: spread the clouds along the bistro street (per-scene defaults for count, radius and distance).
 
-## Next: M2 (PLAN section 11)
-Diamond-dust shading (crystal habits, spectral glints, bilinear glint splats), point motion vectors + depth for frame generation, Rec.2020 working space for the point layer.
+Out of scope for the demo: the crystal valley, path-traced dispersion, physics, audio, glare, and point motion vectors (play with frame generation off).
+
+**Verify**: build → `shot.ps1` → for anything interactive (input, vacuum), ask the user to play it and report back rather than building automation for it.
