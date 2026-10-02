@@ -137,7 +137,7 @@ The game needs built-in automation so Claude Code can see and measure what it bu
 ## 11. Milestones
 | # | Milestone | Done when |
 |---|---|---|
-| M0 | RTXPT subtree builds and runs; NVIDIA adapter forced; HDR10 + GT7 tonemap; DLSS 4.5 SR/RR/FG/MFG toggles; bench/screenshot hooks | Test scene runs at 4K120 with FG on the C2, and bench JSON is produced |
+| M0 | RTXPT merged in, builds and runs; NVIDIA adapter forced; HDR10 + GT7 tonemap; DLSS 4.5 SR/RR/FG/MFG toggles; bench/screenshot hooks | Test scene runs at 4K120 with FG on the C2, and bench JSON is produced |
 | M1 | Point system v0: GPU cloud generation, batches, cull, additive 4K raster, depth test, composite | 1 B points measured; throughput curve recorded; int64 vs fp16x4 atomics benchmarked |
 | M2 | Diamond-dust shading: crystal habits, spectral glints, bilinear glints, point MVs for FG | Halos and sun dogs emerge on their own; FG artifacts judged by eye |
 | M3 | Valley: terrain + erosion, quartz clusters, dispersion in the PT, sky bake, caustic + light-volume bake, salt-pan mirrors | Golden-hour valley screenshots you're happy with |
