@@ -172,6 +172,10 @@ public:
 
 #if TONEMAPPING_AUTOEXPOSURE_CPU
     float3 GetPreExposedGray( uint viewIndex );
+
+    // SHATTER: exposure exactly as the tonemap shader applies it before the operator (auto exposure scale, then color transform),
+    // so the HDR output pass can reproduce it.
+    void GetExposure(uint viewIndex, dm::float3x3& colorTransform, float& autoExposureScale) const;
 #endif
 
     void AdvanceFrame(float frameTime);

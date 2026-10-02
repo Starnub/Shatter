@@ -987,6 +987,7 @@ void StreamlineIntegration::SetDLSSGOptions(const DLSSGOptions& options)
     slOptions.hudLessBufferFormat = options.hudLessBufferFormat;
     slOptions.uiBufferFormat = options.uiBufferFormat;
     slOptions.onErrorCallback = nullptr; // donut does not expose this
+    slOptions.dynamicTargetFrameRate = options.dynamicTargetFrameRate; // SHATTER
 
 #if (SL_VERSION_MAJOR >= 2 && (SL_VERSION_MAJOR > 2 || SL_VERSION_MINOR >= 7))
     slOptions.queueParallelismMode = (sl::DLSSGQueueParallelismMode)options.queueParallelismMode;
@@ -1020,6 +1021,7 @@ void StreamlineIntegration::GetDLSSGState(DLSSGState& state, const DLSSGOptions&
     slOptions.hudLessBufferFormat = options.hudLessBufferFormat;
     slOptions.uiBufferFormat = options.uiBufferFormat;
     slOptions.onErrorCallback = nullptr; // donut does not expose this
+    slOptions.dynamicTargetFrameRate = options.dynamicTargetFrameRate; // SHATTER
 
     sl::DLSSGState slState;
     successCheck(slDLSSGGetState(m_viewport, slState, &slOptions), "slDLSSGGetState");
@@ -1041,6 +1043,7 @@ void StreamlineIntegration::GetDLSSGState(DLSSGState& state, const DLSSGOptions&
     state.numFramesActuallyPresented = slState.numFramesActuallyPresented;
     state.numFramesToGenerateMax = slState.numFramesToGenerateMax;
     state.bIsVsyncSupportAvailable = slState.bIsVsyncSupportAvailable;
+    state.bIsDynamicMFGSupported = (slState.bIsDynamicMFGSupported == sl::Boolean::eTrue); // SHATTER
     state.inputsProcessingCompletionFence = slState.inputsProcessingCompletionFence;
     state.lastPresentInputsProcessingCompletionFenceValue = slState.lastPresentInputsProcessingCompletionFenceValue;
 }

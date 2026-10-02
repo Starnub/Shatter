@@ -348,15 +348,21 @@ void SampleUI::BuildUIPerformancePresets()
 
 void SampleUI::DLSSFGSelectorUI()
 {
-    const char* items[] = { "Off", "2x", "3x", "4x" };
+    const char* items[] = { "Off", "2x", "3x", "4x", "5x", "6x", "Dynamic" }; // SHATTER: up to 6x (5090) + Dynamic MFG
     const int itemCount = IM_ARRAYSIZE(items);
 
     static int currentItem = 0;
+    static bool startItemApplied = false; // SHATTER: --fg
+    if (!startItemApplied)
+    {
+        currentItem = std::clamp(m_ui.DLSSFGStartItem, 0, itemCount - 1);
+        startItemApplied = true;
+    }
     if (ImGui::BeginCombo("Frame Generation", items[currentItem]))
     {
         for (int itemId = 0; itemId < itemCount; itemId++)
         {
-            UI_SCOPED_DISABLE(itemId > m_ui.DLSSFGMaxNumFramesToGenerate);
+            UI_SCOPED_DISABLE((itemId < itemCount - 1) ? (itemId > (int)m_ui.DLSSFGMaxNumFramesToGenerate) : !m_ui.DLSSFGDynamicSupported);
 
             bool isSelected = (currentItem == itemId);
             if (ImGui::Selectable(items[itemId], isSelected))
@@ -367,11 +373,17 @@ void SampleUI::DLSSFGSelectorUI()
         ImGui::EndCombo();
     }
 
-    m_ui.DLSSFGMode = (currentItem > 0)
-        ? donut::app::StreamlineInterface::DLSSGMode::eOn
+    // SHATTER: last entry is Dynamic MFG; its max multiplier comes from DLSSFGMaxNumFramesToGenerate
+    const bool isDynamic = (currentItem == itemCount - 1);
+    m_ui.DLSSFGMode = isDynamic ? donut::app::StreamlineInterface::DLSSGMode::eDynamic
+        : (currentItem > 0) ? donut::app::StreamlineInterface::DLSSGMode::eOn
         : donut::app::StreamlineInterface::DLSSGMode::eOff;
 
-    m_ui.DLSSFGNumFramesToGenerate = (m_ui.DLSSFGMode == donut::app::StreamlineInterface::DLSSGMode::eOn) ? currentItem : 1;
+    m_ui.DLSSFGNumFramesToGenerate = isDynamic ? std::max(1u, m_ui.DLSSFGMaxNumFramesToGenerate)
+        : (m_ui.DLSSFGMode == donut::app::StreamlineInterface::DLSSGMode::eOn) ? currentItem : 1;
+
+    if (isDynamic)
+        ImGui::InputFloat("Dynamic target FPS (0 = refresh)", &m_ui.DLSSFGDynamicTargetFPS, 1.0f, 10.0f, "%.0f");
 
     if (!m_ui.RealtimeMode)
         ImGui::TextColored(warnColor, "Note: DLSS-G is DISABLED in Reference PT mode");
@@ -772,6 +784,23 @@ void SampleUI::buildUI(void)
                     }
                 }
             }
+        }
+
+        // SHATTER: HDR output settings + named camera presets
+        if (ImGui::CollapsingHeader("Shatter: HDR and camera presets"))
+        {
+            shatter::HdrSettings& hdr = m_ui.Hdr;
+            ImGui::Text("Display HDR: %s, Windows-reported peak %.0f nits (full-frame %.0f)", hdr.displayHdrActive ? "on" : "OFF", hdr.displayPeakNits, hdr.displayFullFrameNits);
+            ImGui::SliderFloat("Paper white (nits)", &hdr.paperWhiteNits, 80.0f, 400.0f, "%.0f");
+            ImGui::Checkbox("Override peak", &hdr.peakOverrideEnabled);
+            if (hdr.peakOverrideEnabled)
+                ImGui::SliderFloat("Peak (nits)", &hdr.peakOverrideNits, 250.0f, 1500.0f, "%.0f");
+            ImGui::Text("Effective peak: %.0f nits", hdr.EffectivePeakNits());
+
+            static char presetName[64] = "default";
+            ImGui::InputText("Camera preset name", presetName, sizeof(presetName));
+            if (ImGui::Button("Save camera preset"))
+                shatter::Automation::SaveCameraPreset(m_app.GetCurrentSceneName(), presetName, m_app.GetCurrentCameraPosDirUp());
         }
 
         if (ImGui::CollapsingHeader("Path Tracer", ImGuiTreeNodeFlags_DefaultOpen))

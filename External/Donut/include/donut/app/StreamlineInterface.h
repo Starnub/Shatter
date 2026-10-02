@@ -239,6 +239,7 @@ public:
         eOff,
         eOn,
         eAuto,
+        eDynamic, // SHATTER: Dynamic MFG (Streamline >= 2.11.1); keep in sync with sl::DLSSGMode
         eCount
     };
     enum class DLSSGFlags : uint32_t
@@ -274,6 +275,7 @@ public:
         uint32_t uiBufferFormat{};
         bool useReflexMatrices = false;
         DLSSGQueueParallelismMode queueParallelismMode{};
+        float dynamicTargetFrameRate{}; // SHATTER: eDynamic only; 0 = display refresh rate
     };
     enum class DLSSGStatus : uint32_t
     {
@@ -292,6 +294,7 @@ public:
         uint32_t numFramesActuallyPresented{};
         uint32_t numFramesToGenerateMax{};
         bool bIsVsyncSupportAvailable{};
+        bool bIsDynamicMFGSupported{}; // SHATTER
         void* inputsProcessingCompletionFence{};
         uint64_t lastPresentInputsProcessingCompletionFenceValue{};
     };

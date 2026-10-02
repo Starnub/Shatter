@@ -28,6 +28,15 @@ struct CommandLineOptions
     bool stopAnimations = false;
 	bool disableSER = false;
 
+    // SHATTER: automation + output
+    bool sdr = false;                  // --sdr: original sRGB swapchain instead of HDR10 (debugging only)
+    float bench = 0.0f;                // --bench <seconds>: run, write bench JSON, exit
+    std::string benchOut = "";         // --benchOut <path>
+    std::string camera = "";           // --camera <preset name>
+    std::string screenshot = "";       // --screenshot <path>: writes <path> (SDR PNG) and <path>.exr
+    int fg = 0;                        // --fg N: initial frame generation item: 0 off, 1 2x, 2 3x, 3 4x, 4 5x, 5 6x, 6 Dynamic
+    int frame = 64;                    // --frame N: frame (after scene load) at which --screenshot is taken
+
     std::string capturePath = "";
     bool captureSimple = false;
     bool captureSequence = false;

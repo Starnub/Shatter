@@ -440,6 +440,15 @@ void ToneMappingPass::UpdateColorTransform()
 	m_ColorTransform = m_WhiteBalanceTransform * exposureScale * manualExposureScale;
 }
 
+// SHATTER
+void ToneMappingPass::GetExposure(uint viewIndex, dm::float3x3& colorTransform, float& autoExposureScale) const
+{
+    colorTransform = m_ColorTransform;
+    autoExposureScale = 1.0f;
+    if (m_AutoExposure && viewIndex < m_PerView.size())
+        autoExposureScale = clamp((float)TONEMAPPING_EXPOSURE_KEY / m_PerView[viewIndex].avgLuminanceLastCaptured, std::exp2f(m_ExposureValueMin), std::exp2f(m_ExposureValueMax));
+}
+
 #if TONEMAPPING_AUTOEXPOSURE_CPU
 float3 ToneMappingPass::GetPreExposedGray(uint viewIndex) 
 { 

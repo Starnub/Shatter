@@ -666,6 +666,8 @@ void Sample::SceneLoaded( )
     }
     if (m_cmdLine.cameraPosDirUp != "")
         SetCurrentCameraPosDirUp(m_cmdLine.cameraPosDirUp);
+    else if (m_cmdLine.camera != "") // SHATTER: named camera preset
+        SetCurrentCameraPosDirUp(shatter::Automation::LoadCameraPreset(m_currentSceneName, m_cmdLine.camera));
 
     m_ui.MaterialVariantIndex = 0;
 
@@ -1256,7 +1258,7 @@ void Sample::BackBufferResizing()
 
 // NOTE: we're not yet sure if this is necessary to avoid crash with going in/out of fullscreen and FG
 #if DONUT_WITH_STREAMLINE
-    if (m_ui.DLSSFGOptions.mode == StreamlineInterface::DLSSGMode::eOn || m_ui.ActualDLSSFGMode() == StreamlineInterface::DLSSGMode::eOn) 
+    if (m_ui.DLSSFGOptions.mode != StreamlineInterface::DLSSGMode::eOff || m_ui.ActualDLSSFGMode() != StreamlineInterface::DLSSGMode::eOff) // SHATTER: any FG mode, incl. Dynamic
     {
         GetDeviceManager()->GetStreamline().CleanupDLSS(false);
         GetDeviceManager()->GetStreamline().CleanupDLSSG(false);
@@ -1295,6 +1297,7 @@ void Sample::CreateRenderPasses( bool& exposureResetRequired, nvrhi::CommandList
 
     // these get re-created every time intentionally, to pick up changes after at-runtime shader recompile
     m_toneMappingPass = std::make_unique<ToneMappingPass>(GetDevice(), m_shaderFactory, m_CommonPasses, m_renderTargets->LdrFramebuffer, *m_view, m_renderTargets->OutputColor);
+    m_hdrOutput = std::make_unique<shatter::HdrOutputPass>(GetDevice(), m_shaderFactory, m_CommonPasses); // SHATTER
     m_bloomPass = std::make_unique<BloomPass>(GetDevice(), m_shaderFactory, m_CommonPasses, m_renderTargets->ProcessedOutputFramebuffer, *m_view);
     m_postProcess = std::make_shared<PostProcess>(GetDevice(), m_shaderFactory, m_CommonPasses, m_shaderDebug);
 
@@ -1646,7 +1649,7 @@ void Sample::StreamlinePreRender()
     // DLSS-G Setup
     {
         // If DLSS-G has been turned off, then we tell tell SL to clean it up expressly
-        if (m_ui.DLSSFGOptions.mode == StreamlineInterface::DLSSGMode::eOn && m_ui.ActualDLSSFGMode() == StreamlineInterface::DLSSGMode::eOff) {
+        if (m_ui.DLSSFGOptions.mode != StreamlineInterface::DLSSGMode::eOff && m_ui.ActualDLSSFGMode() == StreamlineInterface::DLSSGMode::eOff) { // SHATTER: any FG mode
             GetDeviceManager()->GetStreamline().CleanupDLSSG(true);
         }
 
@@ -1654,6 +1657,7 @@ void Sample::StreamlinePreRender()
         auto dlssgOptions = StreamlineInterface::DLSSGOptions{};
         dlssgOptions.mode = m_ui.ActualDLSSFGMode();
         dlssgOptions.numFramesToGenerate = m_ui.DLSSFGNumFramesToGenerate;
+        dlssgOptions.dynamicTargetFrameRate = m_ui.DLSSFGDynamicTargetFPS; // SHATTER
 
         // This is where we query DLSS-G minimum swapchain size
         if (GetDeviceManager()->GetStreamline().IsDLSSGAvailable())
@@ -1662,6 +1666,7 @@ void Sample::StreamlinePreRender()
             GetDeviceManager()->GetStreamline().GetDLSSGState(state, dlssgOptions);
             m_ui.DLSSFGMultiplier = state.numFramesActuallyPresented;
             m_ui.DLSSFGMaxNumFramesToGenerate = state.numFramesToGenerateMax;
+            m_ui.DLSSFGDynamicSupported = state.bIsDynamicMFGSupported; // SHATTER
 
             GetDeviceManager()->GetStreamline().SetDLSSGOptions(dlssgOptions);
             m_ui.DLSSFGOptions = dlssgOptions;
@@ -1906,7 +1911,38 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
 
     StreamlinePreRender();
 
- 
+    // SHATTER: automation + HDR display info
+    if (!m_automation)
+    {
+        shatter::AutomationOptions opts;
+        opts.benchSeconds = m_cmdLine.bench;
+        opts.benchOut = m_cmdLine.benchOut;
+        opts.camera = m_cmdLine.camera;
+        opts.screenshotPath = m_cmdLine.screenshot;
+        opts.frame = m_cmdLine.frame;
+        m_automation = std::make_unique<shatter::Automation>(opts);
+        m_automation->Profiler().Init(GetDevice());
+    }
+    m_ui.DLSSFGStartItem = m_cmdLine.fg;
+    if (m_automation->Enabled() && m_cmdLine.fg > 0)
+    {
+        // automation runs: --fg is applied every frame (Dynamic needs the max multiplier from the state query), so it works with the panel collapsed
+        const bool dynamic = (m_cmdLine.fg == 6);
+        m_ui.DLSSFGMode = dynamic ? StreamlineInterface::DLSSGMode::eDynamic : StreamlineInterface::DLSSGMode::eOn;
+        m_ui.DLSSFGNumFramesToGenerate = dynamic ? std::max(1u, m_ui.DLSSFGMaxNumFramesToGenerate) : (uint32_t)m_cmdLine.fg;
+    }
+    m_automation->BeginFrame(!HasAsyncLoadingInProgress());
+    {
+        donut::app::DeviceManager::HdrOutputInfo hdrInfo;
+        if (GetDeviceManager()->GetHdrOutputInfo(hdrInfo))
+        {
+            m_ui.Hdr.displayHdrActive = hdrInfo.hdrActive;
+            m_ui.Hdr.displayPeakNits = hdrInfo.peakNits;
+            m_ui.Hdr.displayFullFrameNits = hdrInfo.fullFrameNits;
+        }
+    }
+
+
     m_displayAspectRatio = m_displaySize.x/(float)m_displaySize.y;
 
     if (m_view == nullptr)
@@ -2181,9 +2217,13 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
 
         m_commandList->writeBuffer(m_constantBuffer, &constants, sizeof(constants));
 
+        m_automation->Profiler().Begin(m_commandList, "PathTrace"); // SHATTER
         SampleRenderCode(framebuffer, m_commandList, constants);
+        m_automation->Profiler().End(m_commandList);
 
+        m_automation->Profiler().Begin(m_commandList, "DLSS_SR_RR"); // SHATTER
         PostProcessAA(framebuffer, needNewPasses || m_ui.ResetRealtimeCaches);
+        m_automation->Profiler().End(m_commandList);
     }
 
     donut::engine::PlanarView fullscreenView = *m_view;
@@ -2191,7 +2231,9 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
     fullscreenView.SetViewport(windowViewport);
     fullscreenView.UpdateCache();
 
+    m_automation->Profiler().Begin(m_commandList, "PostPreToneMap"); // SHATTER
     PostProcessPreToneMapping(m_commandList, fullscreenView);   // writing to m_renderTargets->ProcessedOutputColor
+    m_automation->Profiler().End(m_commandList);
 
     //Tone Mapping; it will read from m_renderTargets->ProcessedOutputColor and write into m_renderTargets->LdrColor; in case tonemapping is disabled, it's just a passthrough
     if (m_toneMappingPass->Render(m_commandList, fullscreenView, m_renderTargets->ProcessedOutputColor, m_ui.EnableToneMapping))
@@ -2209,9 +2251,22 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
 
     m_zoomTool->Render(m_commandList, m_renderTargets->LdrColor);
 
+    // SHATTER: HDR10 output (GT7 tone map -> Rec.2020 PQ) straight into the swapchain; --sdr keeps the original blit of the tonemapped LdrColor
+    m_automation->Profiler().Begin(m_commandList, "FinalOutput");
     m_commandList->beginMarker("Blit");
-    m_CommonPasses->BlitTexture(m_commandList, framebuffer, m_renderTargets->LdrColor, m_bindingCache.get());
+    if (!m_cmdLine.sdr)
+    {
+        shatter::HdrOutputPass::Params hdr;
+        m_toneMappingPass->GetExposure(0, hdr.colorTransform, hdr.autoExposureScale);
+        hdr.paperWhiteNits = m_ui.Hdr.paperWhiteNits;
+        hdr.peakNits = m_ui.Hdr.EffectivePeakNits();
+        hdr.mode = shatter::HdrOutputPass::Mode::HDR10;
+        m_hdrOutput->Render(m_commandList, framebuffer, m_renderTargets->ProcessedOutputColor, hdr, *m_bindingCache);
+    }
+    else
+        m_CommonPasses->BlitTexture(m_commandList, framebuffer, m_renderTargets->LdrColor, m_bindingCache.get());
     m_commandList->endMarker();
+    m_automation->Profiler().End(m_commandList);
 
     if (m_ui.ShowDebugLines == true)
     {
@@ -2266,8 +2321,53 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
     nvrhi::ITexture* framebufferTexture = framebuffer->getDesc().colorAttachments[0].texture;
 
 
+    // SHATTER: screenshot frame: SDR GT7 preview for the PNG + staging copy of the scene-referred source for the EXR
+    if (m_automation->CaptureThisFrame())
+    {
+        if (!m_sdrPreview || m_sdrPreview->getDesc().width != m_displaySize.x || m_sdrPreview->getDesc().height != m_displaySize.y)
+        {
+            nvrhi::TextureDesc d;
+            d.width = m_displaySize.x;
+            d.height = m_displaySize.y;
+            d.format = nvrhi::Format::RGBA8_UNORM; // holds sRGB-encoded values, saved as-is
+            d.isRenderTarget = true;
+            d.initialState = nvrhi::ResourceStates::RenderTarget;
+            d.keepInitialState = true;
+            d.debugName = "SdrPreview";
+            m_sdrPreview = GetDevice()->createTexture(d);
+        }
+        nvrhi::FramebufferHandle sdrFb = GetDevice()->createFramebuffer(nvrhi::FramebufferDesc().addColorAttachment(m_sdrPreview));
+        shatter::HdrOutputPass::Params sdr;
+        m_toneMappingPass->GetExposure(0, sdr.colorTransform, sdr.autoExposureScale);
+        sdr.paperWhiteNits = m_ui.Hdr.paperWhiteNits;
+        sdr.peakNits = m_ui.Hdr.EffectivePeakNits();
+        sdr.mode = shatter::HdrOutputPass::Mode::SdrPreview;
+        m_hdrOutput->Render(m_commandList, sdrFb, m_renderTargets->ProcessedOutputColor, sdr, *m_bindingCache);
+        m_automation->RecordCapture(GetDevice(), m_commandList, m_renderTargets->ProcessedOutputColor, m_sdrPreview);
+    }
+
 	m_commandList->close();
 	GetDevice()->executeCommandList(m_commandList);
+
+    // SHATTER: write screenshot / bench results (exits the process when every requested task is done)
+    if (m_automation->Enabled())
+    {
+        Json::Value meta(Json::objectValue);
+        meta["adapter"] = GetDeviceManager()->GetRendererString();
+        meta["scene"] = m_currentSceneName;
+        meta["camera_pos_dir_up"] = GetCurrentCameraPosDirUp();
+        meta["display_resolution"] = std::to_string(m_displaySize.x) + "x" + std::to_string(m_displaySize.y);
+        meta["render_resolution"] = std::to_string(m_renderSize.x) + "x" + std::to_string(m_renderSize.y);
+        meta["realtime_aa_mode"] = m_ui.RealtimeAA; // 0 none, 1 TAA, 2 DLSS, 3 DLSS-RR
+        meta["frame_gen_mode"] = (int)m_ui.ActualDLSSFGMode();
+        meta["frame_gen_multiplier"] = (int)m_ui.DLSSFGMultiplier;
+        meta["hdr_swapchain"] = !m_cmdLine.sdr;
+        meta["display_hdr_active"] = m_ui.Hdr.displayHdrActive;
+        meta["display_peak_nits"] = m_ui.Hdr.displayPeakNits;
+        meta["effective_peak_nits"] = m_ui.Hdr.EffectivePeakNits();
+        meta["paper_white_nits"] = m_ui.Hdr.paperWhiteNits;
+        m_automation->EndFrame(GetDevice(), m_CommonPasses.get(), m_sdrPreview, meta);
+    }
 
     // resolve right click picking and debug info
     if (m_ui.ContinuousDebugFeedback || m_pick)

@@ -7,7 +7,6 @@ First-person incremental game about collecting billions of points ("diamond dust
 - Keep usage minimal without sacrificing quality. Use subagents or extra tool calls only when they directly improve the result.
 - Reuse before writing: existing libraries and assets first (see PLAN §13). Write code only for what is novel.
 - Phase 1 is point collecting only. Don't build progression systems until the user asks.
-- The old 2016 `Shatter.rar` at the repo root is unrelated. Ignore it.
 
 ## Layout
 - Repo root: NVIDIA RTXPT, merged in with its history (remote `rtxpt`, see PLAN §3). Keep engine edits minimal and mark them `// SHATTER:`.

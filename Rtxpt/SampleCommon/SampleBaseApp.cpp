@@ -327,6 +327,8 @@ bool SampleBaseApp::ProcessCommandLine(int argc, char const* const* argv,
     deviceParams.backBufferHeight = m_CmdLine.height;
     deviceParams.startFullscreen = m_CmdLine.fullscreen;
     deviceParams.adapterIndex = m_CmdLine.adapterIndex;
+    if (!m_CmdLine.sdr)
+        deviceParams.swapChainFormat = nvrhi::Format::R10G10B10A2_UNORM; // SHATTER: HDR10 swapchain (color space is set in DeviceManager_DX12)
 
     return true;
 }
@@ -393,12 +395,14 @@ void SampleBaseApp::CreateShaderFactory()
     std::filesystem::path appShaderPath = appDirectory / "ShaderPrecompiled/Rtxpt" / shaderTypeName;
     std::filesystem::path nrdShaderPath = appDirectory / "ShaderPrecompiled/nrd" / shaderTypeName;
     std::filesystem::path ommShaderPath = appDirectory / "ShaderPrecompiled/omm" / shaderTypeName;
+    std::filesystem::path shatterShaderPath = appDirectory / "ShaderPrecompiled/Shatter" / shaderTypeName; // SHATTER
 
     std::shared_ptr<donut::vfs::RootFileSystem> rootFS = std::make_shared<donut::vfs::RootFileSystem>();
     rootFS->mount("/ShaderPrecompiled/donut", frameworkShaderPath);
     rootFS->mount("/ShaderPrecompiled/app", appShaderPath);
     rootFS->mount("/ShaderPrecompiled/nrd", nrdShaderPath);
     rootFS->mount("/ShaderPrecompiled/omm", ommShaderPath);
+    rootFS->mount("/ShaderPrecompiled/shatter", shatterShaderPath); // SHATTER
 
     auto device = m_DeviceManager->GetDevice();
     m_ShaderFactory = std::make_shared<donut::engine::ShaderFactory>(device, rootFS, "/ShaderPrecompiled");

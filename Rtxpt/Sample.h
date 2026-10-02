@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include "Hdr/HdrOutputPass.h" // SHATTER
+#include "Automation/Automation.h" // SHATTER
 #include "Shaders/PathTracer/Config.h"
 #include "SampleCommon/SampleCommon.h"
 
@@ -245,6 +247,9 @@ private:
     std::vector <std::shared_ptr<donut::engine::Light>> m_lights;
     std::unique_ptr<donut::render::BloomPass>   m_bloomPass;
     std::unique_ptr<ToneMappingPass>            m_toneMappingPass;
+    std::unique_ptr<shatter::HdrOutputPass>     m_hdrOutput;        // SHATTER
+    std::unique_ptr<shatter::Automation>        m_automation;       // SHATTER
+    nvrhi::TextureHandle                        m_sdrPreview;       // SHATTER: RGBA8 target for PNG screenshots
     nvrhi::BufferHandle                         m_constantBuffer;
 
     std::vector<SubInstanceData>                m_subInstanceData;

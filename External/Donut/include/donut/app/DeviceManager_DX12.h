@@ -99,6 +99,7 @@ protected:
     nvrhi::ITexture* GetBackBuffer(uint32_t index) override;
     uint32_t GetCurrentBackBufferIndex() override;
     uint32_t GetBackBufferCount() override;
+    bool GetHdrOutputInfo(HdrOutputInfo& outInfo) override; // SHATTER
     bool BeginFrame() override;
     bool Present() override;
     void Shutdown() override;

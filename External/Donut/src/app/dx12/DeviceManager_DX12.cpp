@@ -56,7 +56,7 @@ freely, subject to the following restrictions:
 #include <donut/core/log.h>
 
 #include <Windows.h>
-#include <dxgi1_5.h>
+#include <dxgi1_6.h>
 #include <dxgidebug.h>
 
 #include <nvrhi/d3d12.h>
@@ -217,16 +217,24 @@ bool DeviceManager_DX12::CreateDevice()
     
     int adapterIndex = m_DeviceParams.adapterIndex;
 
+    // SHATTER: unless an index was given explicitly, always take the high-performance adapter (the 5090, never the iGPU)
+    if (adapterIndex < 0)
+    {
+        RefCountPtr<IDXGIFactory6> factory6;
+        if (SUCCEEDED(m_DxgiFactory2->QueryInterface(IID_PPV_ARGS(&factory6))))
+            factory6->EnumAdapterByGpuPreference(0, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(&m_DxgiAdapter));
+    }
+
 #if DONUT_WITH_STREAMLINE
     // Auto select best adapter for streamline features
-    if (adapterIndex < 0)
+    if (adapterIndex < 0 && !m_DxgiAdapter)
         adapterIndex = StreamlineIntegration::Get().FindBestAdapterDX();
 #endif
 
     if (adapterIndex < 0)
         adapterIndex = 0;
 
-    if (FAILED(m_DxgiFactory2->EnumAdapters(adapterIndex, &m_DxgiAdapter)))
+    if (!m_DxgiAdapter && FAILED(m_DxgiFactory2->EnumAdapters(adapterIndex, &m_DxgiAdapter)))
     {
         if (adapterIndex == 0)
             donut::log::error("Cannot find any DXGI adapters in the system.");
@@ -416,6 +424,17 @@ bool DeviceManager_DX12::CreateSwapChain()
 	hr = pSwapChain1->QueryInterface(IID_PPV_ARGS(&m_SwapChain));
 	HR_RETURN(hr)
 
+    // SHATTER: HDR10 swapchain: R10G10B10A2 + ST.2084 / Rec.2020
+    if (m_DeviceParams.swapChainFormat == nvrhi::Format::R10G10B10A2_UNORM)
+    {
+        UINT support = 0;
+        m_SwapChain->CheckColorSpaceSupport(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020, &support);
+        if (support & DXGI_SWAP_CHAIN_COLOR_SPACE_SUPPORT_FLAG_PRESENT)
+            m_SwapChain->SetColorSpace1(DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+        else
+            donut::log::error("HDR10 color space (G2084/P2020) is not supported by the swapchain or display.");
+    }
+
     if (!CreateRenderTargets())
         return false;
 
@@ -589,6 +608,28 @@ uint32_t DeviceManager_DX12::GetCurrentBackBufferIndex()
 uint32_t DeviceManager_DX12::GetBackBufferCount()
 {
     return m_SwapChainDesc.BufferCount;
+}
+
+// SHATTER
+bool DeviceManager_DX12::GetHdrOutputInfo(HdrOutputInfo& outInfo)
+{
+    outInfo = {};
+    if (!m_SwapChain)
+        return false;
+    RefCountPtr<IDXGIOutput> output;
+    if (FAILED(m_SwapChain->GetContainingOutput(&output)))
+        return false;
+    RefCountPtr<IDXGIOutput6> output6;
+    if (FAILED(output->QueryInterface(IID_PPV_ARGS(&output6))))
+        return false;
+    DXGI_OUTPUT_DESC1 desc;
+    if (FAILED(output6->GetDesc1(&desc)))
+        return false;
+    outInfo.hdrActive = (desc.ColorSpace == DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020);
+    outInfo.peakNits = desc.MaxLuminance;
+    outInfo.minNits = desc.MinLuminance;
+    outInfo.fullFrameNits = desc.MaxFullFrameLuminance;
+    return true;
 }
 
 bool DeviceManager_DX12::Present()

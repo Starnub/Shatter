@@ -369,6 +369,10 @@ namespace donut::app
         virtual nvrhi::ITexture* GetBackBuffer(uint32_t index) = 0;
         virtual uint32_t GetCurrentBackBufferIndex() = 0;
         virtual uint32_t GetBackBufferCount() = 0;
+
+        // SHATTER: HDR output info for the display the window is on (DX12 only, others report false)
+        struct HdrOutputInfo { bool hdrActive = false; float peakNits = 0.f; float minNits = 0.f; float fullFrameNits = 0.f; };
+        virtual bool GetHdrOutputInfo(HdrOutputInfo& outInfo) { (void)outInfo; return false; }
         nvrhi::IFramebuffer* GetCurrentFramebuffer(bool withDepth = true);
         nvrhi::IFramebuffer* GetFramebuffer(uint32_t index, bool withDepth = true);
         nvrhi::ITexture* GetDepthBuffer() const { return m_DepthBuffer; }
