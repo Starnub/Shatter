@@ -21,11 +21,6 @@
 	path = External/Rtxdi
 	url = https://github.com/NVIDIA-RTX/RTXDI-Library.git
 	shallow = false
-[submodule "External/donut"]
-	path = External/Donut
-	url = https://github.com/NVIDIA-RTX/Donut.git
-	branch = main
-	shallow = false
 [submodule "Assets"]
 	path = Assets
 	url = https://github.com/NVIDIA-RTX/RTXPT-Assets.git
@@ -34,3 +29,21 @@
 	path = External/Rtxtf
 	url = https://github.com/NVIDIA-RTX/RTXTF-Library.git
 	shallow = false
+[submodule "External/Donut/nvrhi"]
+	path = External/Donut/nvrhi
+	url = https://github.com/NVIDIA-RTX/NVRHI.git
+[submodule "External/Donut/thirdparty/imgui"]
+	path = External/Donut/thirdparty/imgui
+	url = https://github.com/ocornut/imgui
+[submodule "External/Donut/thirdparty/stb"]
+	path = External/Donut/thirdparty/stb
+	url = https://github.com/nothings/stb.git
+[submodule "External/Donut/thirdparty/glfw"]
+	path = External/Donut/thirdparty/glfw
+	url = https://github.com/glfw/glfw.git
+[submodule "External/Donut/thirdparty/cgltf"]
+	path = External/Donut/thirdparty/cgltf
+	url = https://github.com/jkuhlmann/cgltf
+[submodule "External/Donut/ShaderMake"]
+	path = External/Donut/ShaderMake
+	url = https://github.com/NVIDIA-RTX/ShaderMake.git

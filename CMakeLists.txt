@@ -85,8 +85,9 @@ endfunction()
 option(DONUT_WITH_STREAMLINE "Enable streamline, separate package required" ON)
 set(STREAMLINE_DOWNLOAD_PATH "${CMAKE_SOURCE_DIR}/External/Streamline")
 
-set(DONUT_STREAMLINE_FETCH_URL "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.9.0/streamline-sdk-v2.9.0.zip" CACHE STRING "URL to Streamline package to fetch from https://github.com/NVIDIA-RTX/Streamline/releases")
-set(DONUT_STREAMLINE_FETCH_SHA256 "b7e4f31706cfacafba95d2d4abc2c9dcf2dc5fc58b2a6917c71f83051d271aa1" CACHE STRING "SHA256 hash of Streamline package from https://github.com/NVIDIA-RTX/Streamline/releases")
+# SHATTER: Streamline 2.9.0 -> 2.14.1 (Dynamic MFG, V-Sync/limiter support in Dynamic mode)
+set(DONUT_STREAMLINE_FETCH_URL "https://github.com/NVIDIA-RTX/Streamline/releases/download/v2.14.1/streamline-sdk-v2.14.1.zip" CACHE STRING "URL to Streamline package to fetch from https://github.com/NVIDIA-RTX/Streamline/releases")
+set(DONUT_STREAMLINE_FETCH_SHA256 "92c4d954631a1710da86ca3fa8d5034f2b9503838c95fc4ae977ae149319781b" CACHE STRING "SHA256 hash of Streamline package from https://github.com/NVIDIA-RTX/Streamline/releases")
 set(DONUT_STREAMLINE_FETCH_DIR "${CMAKE_CURRENT_SOURCE_DIR}/External/Streamline" CACHE STRING "Directory to fetch Streamline to, empty uses build directory default")
 
 option(STREAMLINE_FEATURE_DLSS_SR   "Include DLSS-SR dll"           ON  )
