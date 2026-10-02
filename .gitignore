@@ -12,3 +12,4 @@ tests/output/*
 # local project files for shader development outside of VS
 *.sublime-*
 compile-shaders.bat
+Tools/out/
