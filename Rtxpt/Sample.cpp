@@ -1298,6 +1298,8 @@ void Sample::CreateRenderPasses( bool& exposureResetRequired, nvrhi::CommandList
     // these get re-created every time intentionally, to pick up changes after at-runtime shader recompile
     m_toneMappingPass = std::make_unique<ToneMappingPass>(GetDevice(), m_shaderFactory, m_CommonPasses, m_renderTargets->LdrFramebuffer, *m_view, m_renderTargets->OutputColor);
     m_hdrOutput = std::make_unique<shatter::HdrOutputPass>(GetDevice(), m_shaderFactory, m_CommonPasses); // SHATTER
+    if (!m_points) // SHATTER: created once; re-creating would drop the generated clouds
+        m_points = std::make_unique<shatter::PointCloudSystem>(GetDevice(), m_shaderFactory);
     m_bloomPass = std::make_unique<BloomPass>(GetDevice(), m_shaderFactory, m_CommonPasses, m_renderTargets->ProcessedOutputFramebuffer, *m_view);
     m_postProcess = std::make_shared<PostProcess>(GetDevice(), m_shaderFactory, m_CommonPasses, m_shaderDebug);
 
@@ -1922,6 +1924,17 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
         opts.frame = m_cmdLine.frame;
         m_automation = std::make_unique<shatter::Automation>(opts);
         m_automation->Profiler().Init(GetDevice());
+
+        // SHATTER: point cloud settings from the command line (applied once)
+        shatter::PointSettings& points = m_ui.Points;
+        if (m_cmdLine.noPoints) points.enabled = false;
+        if (m_cmdLine.pointsM > 0) points.totalMillions = m_cmdLine.pointsM;
+        if (m_cmdLine.pointClouds > 0) points.cloudCount = m_cmdLine.pointClouds;
+        if (m_cmdLine.pointAtomic >= 0) points.atomicMode = (m_cmdLine.pointAtomic == 1) ? shatter::PointAtomicMode::Fp16x4 : shatter::PointAtomicMode::Int64;
+        if (m_cmdLine.pointLod >= 0) points.lod = (m_cmdLine.pointLod != 0);
+        if (m_cmdLine.pointAgg >= 0) points.waveAggregation = (m_cmdLine.pointAgg != 0);
+        if (m_cmdLine.pointPpp > 0.f) points.maxPointsPerPixel = m_cmdLine.pointPpp;
+        if (m_cmdLine.pointGrid > 0) points.gridLog2 = m_cmdLine.pointGrid;
     }
     m_ui.DLSSFGStartItem = m_cmdLine.fg;
     if (m_automation->Enabled() && m_cmdLine.fg > 0)
@@ -2224,6 +2237,31 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
         m_automation->Profiler().Begin(m_commandList, "DLSS_SR_RR"); // SHATTER
         PostProcessAA(framebuffer, needNewPasses || m_ui.ResetRealtimeCaches);
         m_automation->Profiler().End(m_commandList);
+
+        // SHATTER: diamond-dust points (Game/Points), added to the upscaled HDR color before bloom and tone mapping.
+        // Clouds are generated on the first frame (camera preset already applied) around the current camera.
+        if (m_points && m_ui.Points.enabled)
+        {
+            if (!m_points->HasClouds() || m_ui.Points.regenerate || m_ui.Points.reanchor)
+                m_points->Generate(m_commandList, m_ui.Points, m_view->GetViewOrigin(), m_view->GetViewDirection());
+
+            dm::float3x3 exposureTransform;
+            float autoExposure = 1.f;
+            m_toneMappingPass->GetExposure(0, exposureTransform, autoExposure);
+
+            shatter::PointRenderParams points;
+            points.sceneColor = m_renderTargets->ProcessedOutputColor;
+            points.sceneDepth = m_renderTargets->Depth;
+            points.worldToClip = m_view->GetViewProjectionMatrix(false);
+            points.cameraPos = m_view->GetViewOrigin();
+            points.zNear = m_cameraZNear;
+            points.projScaleY = m_view->GetProjectionMatrix(false)[1][1];
+            points.displaySize = m_displaySize;
+            points.renderSize = m_renderSize;
+            points.exposure = autoExposure * (exposureTransform[0][0] + exposureTransform[1][1] + exposureTransform[2][2]) / 3.f;
+            points.frameIndex = uint32_t(m_frameIndex);
+            m_points->Render(m_commandList, points, m_ui.Points, &m_automation->Profiler());
+        }
     }
 
     donut::engine::PlanarView fullscreenView = *m_view;
@@ -2366,6 +2404,7 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
         meta["display_peak_nits"] = m_ui.Hdr.displayPeakNits;
         meta["effective_peak_nits"] = m_ui.Hdr.EffectivePeakNits();
         meta["paper_white_nits"] = m_ui.Hdr.paperWhiteNits;
+        meta["points"] = shatter::PointCloudSystem::BenchJson(m_ui.Points);
         m_automation->EndFrame(GetDevice(), m_CommonPasses.get(), m_sdrPreview, meta);
     }
 

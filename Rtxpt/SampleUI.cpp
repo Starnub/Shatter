@@ -803,6 +803,46 @@ void SampleUI::buildUI(void)
                 shatter::Automation::SaveCameraPreset(m_app.GetCurrentSceneName(), presetName, m_app.GetCurrentCameraPosDirUp());
         }
 
+        // SHATTER: point clouds (M1)
+        if (ImGui::CollapsingHeader("Shatter: points"))
+        {
+            RAII_SCOPE(ImGui::Indent(indent);, ImGui::Unindent(indent););
+            shatter::PointSettings& pts = m_ui.Points;
+            ImGui::Checkbox("Enabled##points", &pts.enabled);
+            ImGui::Text("%u clouds, %.0f M points, %.0f MB GPU", pts.statClouds, double(pts.statTotalPoints) * 1e-6, double(pts.statGpuBytes) / (1024.0 * 1024.0));
+            ImGui::Text("Rendered: %.1f M points/frame (avg %.1f M), %llu visible batches",
+                double(pts.statRenderedPoints) * 1e-6, pts.statRenderedPointsAvg * 1e-6, (unsigned long long)pts.statVisibleBatches);
+            ImGui::Text("Last generation: %.0f ms CPU, %.1f ms GPU", pts.statGenerateCpuMs, pts.statGenerateGpuMs);
+
+            ImGui::TextColored(categoryColor, "Rendering");
+            int atomicMode = int(pts.atomicMode);
+            if (ImGui::Combo("Accumulation", &atomicMode, "int64 fixed point\0NVAPI fp16x4\0\0"))
+                pts.atomicMode = shatter::PointAtomicMode(atomicMode);
+            ImGui::Checkbox("LOD density cap", &pts.lod);
+            ImGui::SliderFloat("Max points per pixel", &pts.maxPointsPerPixel, 1.f, 256.f, "%.0f", ImGuiSliderFlags_Logarithmic);
+            ImGui::Checkbox("Wave aggregation", &pts.waveAggregation);
+            ImGui::SliderFloat("Aggregate below (px)", &pts.aggregateMaxPixels, 1.f, 128.f, "%.0f");
+            ImGui::SliderFloat("Brightness", &pts.brightness, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
+            ImGui::ColorEdit3("Tint", &pts.tint.x);
+            ImGui::SliderFloat("Depth bias", &pts.depthBias, 0.f, 0.05f, "%.4f");
+
+            ImGui::TextColored(categoryColor, "Generation (press Regenerate)");
+            ImGui::InputInt("Total points (M)", &pts.totalMillions, 100, 1000);
+            pts.totalMillions = dm::clamp(pts.totalMillions, 1, 4000);
+            ImGui::SliderInt("Clouds", &pts.cloudCount, 1, 16);
+            ImGui::SliderFloat("Cloud radius (m)", &pts.cloudRadius, 0.1f, 20.f, "%.2f", ImGuiSliderFlags_Logarithmic);
+            ImGui::SliderFloat("Cloud distance (m)", &pts.cloudDistance, 0.5f, 50.f, "%.1f", ImGuiSliderFlags_Logarithmic);
+            ImGui::SliderInt("Density grid log2", &pts.gridLog2, 5, 9);
+            ImGui::SliderFloat("Warp", &pts.warp, 0.f, 1.5f);
+            ImGui::SliderFloat("Noise frequency", &pts.noiseFrequency, 0.25f, 6.f);
+            ImGui::SliderFloat("Cell jitter", &pts.jitterCells, 1.f, 3.f);
+            if (ImGui::Button("Regenerate"))
+                pts.regenerate = true;
+            ImGui::SameLine();
+            if (ImGui::Button("Regenerate at camera"))
+                pts.reanchor = true;
+        }
+
         if (ImGui::CollapsingHeader("Path Tracer", ImGuiTreeNodeFlags_DefaultOpen))
         {
             RAII_SCOPE(ImGui::Indent(indent); , ImGui::Unindent(indent); );

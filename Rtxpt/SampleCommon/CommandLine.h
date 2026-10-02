@@ -36,6 +36,15 @@ struct CommandLineOptions
     std::string screenshot = "";       // --screenshot <path>: writes <path> (SDR PNG) and <path>.exr
     int fg = 0;                        // --fg N: initial frame generation item: 0 off, 1 2x, 2 3x, 3 4x, 4 5x, 5 6x, 6 Dynamic
     int frame = 64;                    // --frame N: frame (after scene load) at which --screenshot is taken
+    // SHATTER: point clouds (M1); negative = keep the default
+    bool noPoints = false;             // --noPoints
+    int pointsM = -1;                  // --pointsM N: total points in millions
+    int pointClouds = -1;              // --pointClouds N
+    int pointAtomic = -1;              // --pointAtomic 0|1: 0 int64 fixed point, 1 NVAPI fp16x4
+    int pointLod = -1;                 // --pointLod 0|1
+    int pointAgg = -1;                 // --pointAgg 0|1: wave pre-aggregation
+    float pointPpp = -1.f;             // --pointPpp X: LOD cap in points per pixel
+    int pointGrid = -1;                // --pointGrid N: density grid log2 resolution
 
     std::string capturePath = "";
     bool captureSimple = false;

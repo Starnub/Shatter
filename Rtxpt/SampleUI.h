@@ -24,6 +24,7 @@ using namespace donut::math;
 
 #include "ToneMapper/ToneMappingPasses.h"
 #include "Hdr/HdrOutputPass.h" // SHATTER
+#include "Points/PointCloudSystem.h" // SHATTER
 #include "Shaders/PathTracer/PathTracerDebug.hlsli"
 
 #if ENABLE_DEBUG_DELTA_TREE_VIZUALISATION
@@ -258,6 +259,7 @@ struct SampleUIData
     uint32_t                            DLSSFGNumFramesToGenerate = 1;
     uint32_t                            DLSSFGMaxNumFramesToGenerate = 1;
     shatter::HdrSettings                Hdr;                                // SHATTER: HDR output settings
+    shatter::PointSettings              Points;                             // SHATTER: point clouds (M1)
     bool                                DLSSFGDynamicSupported = false;     // SHATTER: Dynamic MFG
     int                                 DLSSFGStartItem = 0;                // SHATTER: from --fg
     float                               DLSSFGDynamicTargetFPS = 0.0f;      // SHATTER: 0 = display refresh rate

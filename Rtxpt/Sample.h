@@ -12,6 +12,7 @@
 
 #include "Hdr/HdrOutputPass.h" // SHATTER
 #include "Automation/Automation.h" // SHATTER
+#include "Points/PointCloudSystem.h" // SHATTER
 #include "Shaders/PathTracer/Config.h"
 #include "SampleCommon/SampleCommon.h"
 
@@ -249,6 +250,7 @@ private:
     std::unique_ptr<ToneMappingPass>            m_toneMappingPass;
     std::unique_ptr<shatter::HdrOutputPass>     m_hdrOutput;        // SHATTER
     std::unique_ptr<shatter::Automation>        m_automation;       // SHATTER
+    std::unique_ptr<shatter::PointCloudSystem>  m_points;           // SHATTER: diamond-dust points (M1)
     nvrhi::TextureHandle                        m_sdrPreview;       // SHATTER: RGBA8 target for PNG screenshots
     nvrhi::BufferHandle                         m_constantBuffer;
 

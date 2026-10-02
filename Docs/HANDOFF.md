@@ -28,5 +28,24 @@ Compare bench JSON before and after every perf change (CLAUDE.md).
 - Presented fps with frame generation is an estimate (base fps x Streamline multiplier), not measured on the display. Dynamic MFG generates nothing when base fps already exceeds the 120 Hz target.
 - DLSS DLLs are file version 310.9.1; not confirmed to be the 4.5 model.
 
-## Next: M1 (PLAN section 11)
-GPU cloud generation (noise-warped Gaussian first), Morton-sorted batches of 4096 at 4 bytes/point, batch cull, additive native-4K compute raster, composite before `HdrOutputPass`, 1 B points measured, int64 vs fp16x4 atomics benchmarked. Put code in `Game/points/`, shaders in `Game/Shaders/` (compiled by `Game/shaders.cfg`).
+## M1: point system v0 (written in the cloud, not yet built or run)
+Code: `Game/Points/` (C++), `Game/Shaders/Points/` (HLSL, compiled by `Game/shaders.cfg`), hook in `Rtxpt/Sample.cpp` right after `DLSS_SR_RR` (marked SHATTER), UI panel "Shatter: points", CLI flags in `Rtxpt/SampleCommon/CommandLine.cpp`.
+- **Generation** (`CloudDensity.cpp` + `PointGenerate.hlsl`): the CPU evaluates a noise-warped Gaussian density on a Morton-ordered grid (FastNoiseLite, MIT, vendored in `Game/ThirdParty`) and turns it into per-cell point offsets. The GPU then generates each 4096-point batch from those offsets. No billion-point sort is needed, batches are spatially coherent, and storage order is permuted inside a batch, so any prefix is a uniform subsample. Points are 4 bytes (11/11/10 bits in the batch AABB, dithered on decode). Clouds are capped at 512M points each (2 GB buffers); default 1B points in 4 clouds placed in a row in front of the camera on the first frame.
+- **Per frame**: per-cloud batch cull (8-corner frustum test, screen-footprint LOD capped at N points per pixel with energy compensation) → indirect raster (one workgroup per batch, additive) → one composite into `ProcessedOutputColor` before bloom/tonemap. GPU passes `Points_Cull`, `Points_Raster`, `Points_Composite` show up in bench JSON; `points.*` holds counts, VRAM and generation times.
+- **Accumulation modes**: int64 `InterlockedAdd` with 21/21/22-bit fixed point and stochastic rounding (default), or NVAPI `NvInterlockedAddFp16x4` into RGBA16F. Optional wave pre-aggregation (`WaveMatch` + `WaveMultiPrefixSum`) for batches that are small on screen.
+- Verified in the cloud only: all shader permutations compile with DXC 1.9.2602 at SM 6.6 and 6.9; the new C++ passes a clang syntax check against the Donut/NVRHI/jsoncpp headers. `Sample.cpp`/`SampleUI.cpp` edits have not been compiled.
+- Known M1 limits: placeholder shading (M2 does glints); points have no motion vectors yet, so frame generation will ghost them (bench with `--fg 0`); depth test uses the render-resolution jittered depth (edge shimmer possible); Hi-Z occlusion deferred to M3; generation is synchronous on the first frame.
+
+### Windows checks for M1 (run from the repo root)
+```
+cmake -S . -B build                                   # re-run: new source files are globbed
+cmake --build build --config Release --parallel
+bin\Rtxpt.exe --scene kitchen.scene.json --camera default --debug --bench 5 --pointsM 100
+     # D3D12 debug layer + NVRHI validation: any errors/warnings mentioning Point* in the log?
+bin\Rtxpt.exe --scene kitchen.scene.json --width 3840 --height 2160 --camera default --fg 0 --screenshot Tools\out\points.png --frame 64
+powershell -ExecutionPolicy Bypass -File Tools\bench_points.ps1     # full sweep (about 2 min); -Quick for 3 runs
+```
+Then check visually: clouds in front of the default camera, hidden correctly behind kitchen geometry, no grid or lattice patterns, and int64 vs fp16x4 look the same.
+
+## Next: M2 (PLAN section 11)
+Diamond-dust shading (crystal habits, spectral glints, bilinear glint splats), point motion vectors + depth for frame generation, Rec.2020 working space for the point layer.
