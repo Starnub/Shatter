@@ -1,10 +1,10 @@
 # Shatter: Phase 1 Plan, "Diamond Dust"
 
-Phase 1 is only about collecting points, and it should feel great before any progression exists. Progression (0D points → 1D lines → 2D planes → 3D polyhedra → 4D polychora) gets designed after this is polished.
+Phase 1 is only about collecting points, and it should feel great before any progression exists. Progression (0D points â†’ 1D lines â†’ 2D planes â†’ 3D polyhedra â†’ 4D polychora) gets designed after this is polished.
 
 ## 1. Vision
 
-You walk a crystal valley stuck at golden hour. Clouds of **diamond dust** hang between quartz spires and drift over salt pans: billions of tiny crystal facets, each one flashing a pure spectral color when the sun, the facet and your eye line up. Standing inside a cloud and looking toward the sun, you see the 22° halo, sun dogs and sun pillars. Nothing paints them on; they come out of billions of individually shaded points, the same way they form in real diamond dust. You walk and glide up to a cloud, aim the nozzle, and the points spiral into it along swirling vortex paths and pile up as a glittering swarm inside a glass canister.
+You walk a crystal valley stuck at golden hour. Clouds of **diamond dust** hang between quartz spires and drift over salt pans: billions of tiny crystal facets, each one flashing a pure spectral color when the sun, the facet and your eye line up. Standing inside a cloud and looking toward the sun, you see the 22Â° halo, sun dogs and sun pillars. Nothing paints them on; they come out of billions of individually shaded points, the same way they form in real diamond dust. You walk and glide up to a cloud, aim the nozzle, and the points spiral into it along swirling vortex paths and pile up as a glittering swarm inside a glass canister.
 
 ## 2. Target machine (no fallbacks, no compatibility paths)
 
@@ -34,13 +34,13 @@ You walk a crystal valley stuck at golden hour. Clouds of **diamond dust** hang 
 
 License: NVIDIA RTX SDK license. Fine for a personal project; if Shatter is ever released, it needs attribution ("contains source code provided by NVIDIA") and a notice to NVIDIA before shipping DLSS.
 
-**Repo layout.** RTXPT depends on git submodules, which `git subtree` doesn't carry, so its history is merged straight into this repo: add it as remote `rtxpt`, merge its latest release tag with `--allow-unrelated-histories`, then `git submodule update --init --recursive`. Upstream updates become `git fetch rtxpt` plus a merge of the newer tag. Before the first merge, check for case-insensitive path collisions (Windows), e.g. our `docs/` against any `Docs/` in RTXPT.
+**Repo layout.** RTXPT depends on git submodules, which `git subtree` doesn't carry, so its history is merged straight into this repo: add it as remote `rtxpt`, merge its latest release tag with `--allow-unrelated-histories`, then `git submodule update --init --recursive`. Upstream updates become `git fetch rtxpt` plus a merge of the newer tag. Before the first merge, check for case-insensitive path collisions (Windows), e.g. our docs/ against RTXPT's Docs/ (resolved by renaming ours to Docs/).
 
 ```
 /          RTXPT root (engine + its submodules); edits kept minimal and marked `// SHATTER:`
 /Game/     all Shatter code: points/, world/, player/, vacuum/, audio/, hdr/, shaders/
 /Tools/    bench + screenshot scripts used by Claude Code during iteration
-/docs/     this plan
+/Docs/     this plan (RTXPT's own docs live here too)
 ```
 
 **Upgrades to the fork at M0:** latest Streamline (2.11.x / DLSS 4.5 with Dynamic MFG), Agility SDK 1.619 (SM 6.9 retail), DXC 1.9.2602+.
@@ -51,21 +51,21 @@ License: NVIDIA RTX SDK license. Fine for a personal project; if Shatter is ever
 
 ### 4.1 Storage: about 4 bytes per point
 - Clouds are **generated on the GPU at load** from seeds, so nothing is shipped. Generators: noise-warped Gaussian bodies, curl-noise wisps, strange attractors (Aizawa, Thomas, Halvorsen, Lorenz), 3D IFS "fractal dust" via the chaos game, plus a horizontal-plate "sheet" cloud that lies low over the salt pans. Fractal dusts have non-integer dimension (a Cantor-like dust sits between 0D and 1D), which is a natural hook for Phase 2.
-- Points are Morton-sorted with a GPU radix sort (b0nes164/[GPUSorting](https://github.com/b0nes164/GPUSorting) OneSweep for D3D12, license to be checked, or FidelityFX Parallel Sort (MIT)) and then cut into **batches of 4096**. Each batch stores an fp32 AABB. Each point stores **3 × 11/11/10-bit offsets inside its batch AABB = 4 bytes**, which is sub-millimeter precision. Points are shuffled inside each batch so any prefix is a uniform subsample (LOD for free).
+- Points are Morton-sorted with a GPU radix sort (b0nes164/[GPUSorting](https://github.com/b0nes164/GPUSorting) OneSweep for D3D12, license to be checked, or FidelityFX Parallel Sort (MIT)) and then cut into **batches of 4096**. Each batch stores an fp32 AABB. Each point stores **3 Ã— 11/11/10-bit offsets inside its batch AABB = 4 bytes**, which is sub-millimeter precision. Points are shuffled inside each batch so any prefix is a uniform subsample (LOD for free).
 - **Nothing else is stored per point.** Crystal habit, orientation, size and material come from `hash(cloudId, pointIndex)`.
 - Collected state is a **1-bit mask per point**.
-- Budget: 1 B points at M1, then scale toward **4 B (≈16 GB positions + 0.5 GB mask)** while there's VRAM headroom. If more is ever wanted, instanced cloud templates come next (CuRast showed 4 B instanced triangles at 60 fps on a 5090).
+- Budget: 1 B points at M1, then scale toward **4 B (â‰ˆ16 GB positions + 0.5 GB mask)** while there's VRAM headroom. If more is ever wanted, instanced cloud templates come next (CuRast showed 4 B instanced triangles at 60 fps on a 5090).
 
 ### 4.2 Rendering: compute rasterization at native 4K, additive, order-independent
-This builds on Schütz, Kerbl & Wimmer's compute point rasterizers (2021, [2022 "2 Billion Points"](https://www.cg.tuwien.ac.at/research/publications/2022/SCHUETZ-2022-PCC/SCHUETZ-2022-PCC-paper.pdf)) and [CuRast (2026)](https://github.com/m-schuetz/CuRast), with one important change. Real diamond dust is sparse and translucent, so points barely occlude each other. Instead of their 64-bit `atomicMin` nearest-point visibility, Shatter **sums radiance** per pixel. That is physically right for glints, has no sorting and no order dependence, and aliases far less than winner-takes-all.
+This builds on SchÃ¼tz, Kerbl & Wimmer's compute point rasterizers (2021, [2022 "2 Billion Points"](https://www.cg.tuwien.ac.at/research/publications/2022/SCHUETZ-2022-PCC/SCHUETZ-2022-PCC-paper.pdf)) and [CuRast (2026)](https://github.com/m-schuetz/CuRast), with one important change. Real diamond dust is sparse and translucent, so points barely occlude each other. Instead of their 64-bit `atomicMin` nearest-point visibility, Shatter **sums radiance** per pixel. That is physically right for glints, has no sorting and no order dependence, and aliases far less than winner-takes-all.
 
 Per frame:
-1. **Batch cull** (one thread per batch): frustum, Hi-Z occlusion against scene depth, distance → LOD: all points / a prefix subsample with energy compensation / volume-only. Writes indirect dispatch args.
-2. **4K scene depth**: depth-only raster of terrain + crystals at native 4K (mesh shaders, well under 1 ms). Glass surfaces write depth, so points behind a crystal are hidden here and show up *refracted* through the path tracer instead (§4.5).
-3. **Raster** (one workgroup per batch, one thread per point): decode → mask test → project → depth test → glint shading (§4.3) → accumulate.
+1. **Batch cull** (one thread per batch): frustum, Hi-Z occlusion against scene depth, distance â†’ LOD: all points / a prefix subsample with energy compensation / volume-only. Writes indirect dispatch args.
+2. **4K scene depth**: depth-only raster of terrain + crystals at native 4K (mesh shaders, well under 1 ms). Glass surfaces write depth, so points behind a crystal are hidden here and show up *refracted* through the path tracer instead (Â§4.5).
+3. **Raster** (one workgroup per batch, one thread per point): decode â†’ mask test â†’ project â†’ depth test â†’ glint shading (Â§4.3) â†’ accumulate.
    - Accumulate into a 4K buffer with 64-bit integer `InterlockedAdd` (RGB packed as 21/21/22-bit fixed point, scaled by last frame's exposure). The alternative to benchmark is NVAPI `NvInterlockedAddFp16x4` into RGBA16F.
    - Pre-aggregate inside the wave (`WaveMatch` + `WaveActiveSum`) when many lanes hit the same pixel, which is common for distant dense batches.
-   - Dim points splat to one pixel. Bright glints splat **2×2 bilinear** for temporal stability.
+   - Dim points splat to one pixel. Bright glints splat **2Ã—2 bilinear** for temporal stability.
    - Points above a brightness threshold also `InterlockedMin` their depth into a point-depth buffer, which feeds motion vectors and depth to frame generation.
 4. **Composite** onto the upscaled HDR scene color before tonemapping, with merged depth/MVs, then hand off to DLSS FG.
 
@@ -73,30 +73,30 @@ Per frame:
 
 ### 4.3 Glint shading: real ice/diamond optics per point
 Each point is a tiny crystal with a hashed orientation drawn from a per-cloud distribution:
-- **Random 3D** orientation → 22° and 46° halos
-- **Horizontal plates** (c-axis vertical with a few degrees of wobble) → sun dogs, sun pillar, circumzenithal arc
-- **Horizontal columns** → upper tangent arc and Parry arcs
+- **Random 3D** orientation â†’ 22Â° and 46Â° halos
+- **Horizontal plates** (c-axis vertical with a few degrees of wobble) â†’ sun dogs, sun pillar, circumzenithal arc
+- **Horizontal columns** â†’ upper tangent arc and Parry arcs
 
 For each point, the shader evaluates a few analytic ray paths:
 - **External reflection** off the face whose normal is closest to the sun-eye half-vector. This gives white glints and the sun pillar.
-- **Refraction through a 60° prism face pair** (minimum deviation with ice n≈1.31 is 21.8°, the 22° halo) and through a **90° basal/prism pair** (45.7°, the 46° halo).
-- **Dispersion**: n(λ) from a Cauchy fit (ice ≈1.306 red → 1.317 blue; diamond 2.41-2.45 for far stronger "fire"). Along each path the shader solves for the wavelength λ* whose outgoing direction points at the eye. Intensity = Fresnel transmittances × a Gaussian in the angular miss, using the sun's angular radius (0.27°) plus facet imperfection. Color = CIE(λ*) → Rec.2020.
+- **Refraction through a 60Â° prism face pair** (minimum deviation with ice nâ‰ˆ1.31 is 21.8Â°, the 22Â° halo) and through a **90Â° basal/prism pair** (45.7Â°, the 46Â° halo).
+- **Dispersion**: n(Î») from a Cauchy fit (ice â‰ˆ1.306 red â†’ 1.317 blue; diamond 2.41-2.45 for far stronger "fire"). Along each path the shader solves for the wavelength Î»* whose outgoing direction points at the eye. Intensity = Fresnel transmittances Ã— a Gaussian in the angular miss, using the sun's angular radius (0.27Â°) plus facet imperfection. Color = CIE(Î»*) â†’ Rec.2020.
 - A cheap early-out rejects the vast majority of points that can't glint this frame. Non-glinting points add a faint scattering term that gives the cloud its body.
 
-Incoming sun light per point comes from a **baked light volume** per cloud (§4.4), so points in a crystal's shadow go dark and points in its dispersed beam glint in that beam's colors. Cloud materials: ice first; diamond and quartz clouds add variety later.
+Incoming sun light per point comes from a **baked light volume** per cloud (Â§4.4), so points in a crystal's shadow go dark and points in its dispersed beam glint in that beam's colors. Cloud materials: ice first; diamond and quartz clouds add variety later.
 
 ### 4.4 Baked light (the sun and the scene never move)
 A fixed sun over a static valley means most of the expensive light transport is a **one-time load cost**:
-- **Per-cloud sun light volume** (≈128³, RGB9E5): photons are traced from the sun with inline ray queries through the crystal meshes, spectrally, so they carry dispersion-colored transmission, shadowing and focused caustic beams, plus the cloud's own extinction toward the sun.
+- **Per-cloud sun light volume** (â‰ˆ128Â³, RGB9E5): photons are traced from the sun with inline ray queries through the crystal meshes, spectrally, so they carry dispersion-colored transmission, shadowing and focused caustic beams, plus the cloud's own extinction toward the sun.
 - **Ground caustic lightmap**: the terrain is a heightfield, so caustics splat into a 2D texture over the valley. The path tracer adds it at diffuse ground hits and excludes sun-through-glass NEE so nothing is counted twice.
-- **Halo phase-function LUT** for each crystal population: Monte Carlo through hexagonal prisms in the style of [HaloRay](https://github.com/naavis/haloray) and [Lumice](https://github.com/saqibkh/Lumice). The volume LOD (§4.5) uses it, so far clouds and near points produce the same halo.
+- **Halo phase-function LUT** for each crystal population: Monte Carlo through hexagonal prisms in the style of [HaloRay](https://github.com/naavis/haloray) and [Lumice](https://github.com/saqibkh/Lumice). The volume LOD (Â§4.5) uses it, so far clouds and near points produce the same halo.
 
 ### 4.5 Volume LOD and secondary rays
 Each cloud gets a density volume, built at load by splatting its points into a grid. Far batches render as a ray-marched medium with the halo phase LUT instead of as points. The same volumes are added to the path tracer as procedural AABBs in the TLAS, so clouds appear **through refracting crystals and in mirror reflections**. Stretch goal: put the brightest/nearest active particles into a Blackwell sphere/LSS BLAS so individual vacuumed sparkles show up in refractions.
 
 ## 5. Vacuum
-- **Input**: hold the mouse button and a cone pulls from the nozzle (start at ~6 m range, ~25° half-angle; tunable later as upgrades).
-- **Activation** (compute): batches overlapping the cone → per-point test → the point is probabilistically captured with chance ∝ suction × falloff × dt → `InterlockedAnd` clears its mask bit, and the winning thread appends it to an **active particle buffer** (position, velocity, seed, age; budget 5-20 M).
+- **Input**: hold the mouse button and a cone pulls from the nozzle (start at ~6 m range, ~25Â° half-angle; tunable later as upgrades).
+- **Activation** (compute): batches overlapping the cone â†’ per-point test â†’ the point is probabilistically captured with chance âˆ suction Ã— falloff Ã— dt â†’ `InterlockedAnd` clears its mask bit, and the winning thread appends it to an **active particle buffer** (position, velocity, seed, age; budget 5-20 M).
 - **Flow**: suction (inverse-square toward the nozzle, cone falloff) + swirl around the nozzle axis + divergence-free **curl noise** turbulence (Bridson 2007) + drag. Particles accelerate, spiral in, and are counted when they reach the nozzle mouth. Fast particles can draw as short velocity-aligned streaks.
 - **Wake**: clouds part as you walk through them. Points near a ring buffer of the player's recent positions get an analytic displacement at render time, which costs no storage and no simulation.
 - **Canister**: glass cylinder on the device. Collected points keep swirling inside it (a capped representative set) and visibly fill it up. It doubles as the diegetic counter, so Phase 1 needs no HUD numbers.
@@ -106,11 +106,11 @@ Each cloud gets a density volume, built at load by splatting its points into a g
 - **Bounded valley, ~1.5 km.** Heightfield terrain from FastNoise2 (MIT) noise plus GPU hydraulic erosion. Pale salt/quartz sand, with **shallow wet salt pans as mirrors**. Mirrors double every spire, cloud and glint for little cost. The point layer can render a second time with a reflected view matrix, masked to mirror pixels, for crisp reflected glints.
 - **Crystals**: procedural quartz clusters (hexagonal prism + pyramidal termination, taper, phantoms, inclusions) from pebbles to 80 m spires. About 50 variants as BLASes, instanced up to ~100k times. Clear / smoky / amethyst / citrine tints.
 - **Spectral dispersion in the path tracer**: hero-wavelength sampling (Wilkie et al. 2014) added to RTXPT's dielectric BSDF. Wavelength choice is stratified across pixels so DLSS RR sees structured noise.
-- **Sky**: fixed sun at ~6-10° elevation, baked once into an HDR environment map with the [Prague Sky Model](https://cgg.mff.cuni.cz/) (spectral, accurate at low sun angles). Fallback: Hillaire 2020 (MIT sample code). Analytic sun disk with limb darkening.
+- **Sky**: fixed sun at ~6-10Â° elevation, baked once into an HDR environment map with the [Prague Sky Model](https://cgg.mff.cuni.cz/) (spectral, accurate at low sun angles). Fallback: Hillaire 2020 (MIT sample code). Analytic sun disk with limb darkening.
 
 ## 7. Player
 - **Jolt Physics** (MIT) `CharacterVirtual`: walk / sprint / jump. **Glide**: hold jump in the air for reduced gravity and forward lift. Crystals are hexagonal prisms, i.e. convex hulls, which makes collision cheap and exact.
-- Raw mouse input (GLFW raw motion, which Donut already uses). ~90° FOV, tunable.
+- Raw mouse input (GLFW raw motion, which Donut already uses). ~90Â° FOV, tunable.
 
 ## 8. HDR on the LG C2
 - HDR10 swapchain (R10G10B10A2, `DXGI_COLOR_SPACE_RGB_FULL_G2084_NONE_P2020`), flip model, tearing allowed for VRR.
@@ -127,12 +127,12 @@ Each cloud gets a density volume, built at load by splatting its points into a g
 
 ## 10. Iteration workflow (Claude Code running on your PC)
 The game needs built-in automation so Claude Code can see and measure what it builds:
-- `--bench <seconds> --camera <preset>` → JSON of per-pass GPU timestamps + VRAM usage
-- `--screenshot <path> --frame N` → EXR (scene-referred) **and** a tonemapped SDR PNG. Claude Code can read the PNG; HDR judgement stays with your eyes.
+- `--bench <seconds> --camera <preset>` â†’ JSON of per-pass GPU timestamps + VRAM usage
+- `--screenshot <path> --frame N` â†’ EXR (scene-referred) **and** a tonemapped SDR PNG. Claude Code can read the PNG; HDR judgement stays with your eyes.
 - Camera presets saved and loaded by name, so before/after comparisons are reproducible
 - PIX / Nsight Graphics for deep dives when the JSON isn't enough
 
-**Install before starting:** Visual Studio 2022 (Desktop C++ workload, Windows 11 SDK), CMake ≥ 4.0.2, Git, Python 3, PIX, Nsight Graphics, Claude Code. Then clone this repo, check out this branch, and start a session with: *"Start M0 from docs/PLAN.md."*
+**Install before starting:** Visual Studio 2022 (Desktop C++ workload, Windows 11 SDK), CMake â‰¥ 4.0.2, Git, Python 3, PIX, Nsight Graphics, Claude Code. Then clone this repo, check out this branch, and start a session with: *"Start M0 from Docs/PLAN.md."*
 
 ## 11. Milestones
 | # | Milestone | Done when |
@@ -155,15 +155,15 @@ The game needs built-in automation so Claude Code can see and measure what it bu
 - Every number in this document is a target. None of it has run yet.
 
 ## 13. Libraries (existing work reused, per your rule)
-RTXPT / Donut / NVRHI / Streamline / NRD (NVIDIA RTX SDK license) · DirectX Agility SDK 1.619 + DXC · NVAPI · Jolt Physics (MIT) · FastNoise2 (MIT) · GPUSorting or FidelityFX Parallel Sort · GT7 tone mapping (MIT) · miniaudio (PD/MIT-0) · Steam Audio (Apache 2.0) · Dear ImGui (MIT, via Donut) · Prague Sky Model / Hillaire 2020 sample (MIT).
+RTXPT / Donut / NVRHI / Streamline / NRD (NVIDIA RTX SDK license) Â· DirectX Agility SDK 1.619 + DXC Â· NVAPI Â· Jolt Physics (MIT) Â· FastNoise2 (MIT) Â· GPUSorting or FidelityFX Parallel Sort Â· GT7 tone mapping (MIT) Â· miniaudio (PD/MIT-0) Â· Steam Audio (Apache 2.0) Â· Dear ImGui (MIT, via Donut) Â· Prague Sky Model / Hillaire 2020 sample (MIT).
 
 ## 14. References
-- Schütz, Kerbl, Wimmer, *Rendering Point Clouds with Compute Shaders and Vertex Order Optimization*, EGSR 2021
-- Schütz, Kerbl, Wimmer, [*Software Rasterization of 2 Billion Points in Real Time*](https://www.cg.tuwien.ac.at/research/publications/2022/SCHUETZ-2022-PCC/SCHUETZ-2022-PCC-paper.pdf), HPG 2022
-- Schütz et al., *SimLOD*, 2024; Erler, Schütz et al., *LidarScout*, HPG 2025
-- Schütz, Lipp, Kristmann, Wimmer, [*CuRast: CUDA-Based Software Rasterization for Billions of Triangles*](https://github.com/m-schuetz/CuRast), CGF 2026 (RTX 5090: 1 B unique / 4 B instanced triangles at 60 fps)
+- SchÃ¼tz, Kerbl, Wimmer, *Rendering Point Clouds with Compute Shaders and Vertex Order Optimization*, EGSR 2021
+- SchÃ¼tz, Kerbl, Wimmer, [*Software Rasterization of 2 Billion Points in Real Time*](https://www.cg.tuwien.ac.at/research/publications/2022/SCHUETZ-2022-PCC/SCHUETZ-2022-PCC-paper.pdf), HPG 2022
+- SchÃ¼tz et al., *SimLOD*, 2024; Erler, SchÃ¼tz et al., *LidarScout*, HPG 2025
+- SchÃ¼tz, Lipp, Kristmann, Wimmer, [*CuRast: CUDA-Based Software Rasterization for Billions of Triangles*](https://github.com/m-schuetz/CuRast), CGF 2026 (RTX 5090: 1 B unique / 4 B instanced triangles at 60 fps)
 - Collado et al., *Virtualized Point Cloud Rendering*, IEEE TVCG 2025
-- Unterguggenberger, Lipp, Wimmer, Steinberger, Kerbl, Schütz, *Adaptive LOD for Fast Rendering of Parametric Objects on Modern GPUs*, IEEE TVCG 2026. **Relevant to Phase 2**: point-rasterized lines and surfaces.
+- Unterguggenberger, Lipp, Wimmer, Steinberger, Kerbl, SchÃ¼tz, *Adaptive LOD for Fast Rendering of Parametric Objects on Modern GPUs*, IEEE TVCG 2026. **Relevant to Phase 2**: point-rasterized lines and surfaces.
 - *Virtualized 3D Gaussians: cluster-based LOD*, 2025
 - Deliot & Belcour, *Real-Time Rendering of Glinty Appearances using Distributed Binomial Laws on Anisotropic Grids*, HPG 2023; *Real-Time Image-Based Lighting of Glints*, 2025
 - Wilkie et al., *Hero Wavelength Spectral Sampling*, EGSR 2014

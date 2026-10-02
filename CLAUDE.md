@@ -1,6 +1,6 @@
 # Shatter
 
-First-person incremental game about collecting billions of points ("diamond dust") in a path-traced crystal valley. **Read `docs/PLAN.md` before doing anything**: it holds the design, architecture, milestones and the reasoning behind them.
+First-person incremental game about collecting billions of points ("diamond dust") in a path-traced crystal valley. **Read `Docs/PLAN.md` before doing anything**: it holds the design, architecture, milestones and the reasoning behind them.
 
 ## Ground rules
 - Build for one machine only: RTX 5090 / 9800X3D / Win 11 / LG C2 42" HDR at 4K120. No fallbacks, no compatibility paths, no other vendors.
