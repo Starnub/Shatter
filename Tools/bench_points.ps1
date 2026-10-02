@@ -34,10 +34,14 @@ if ($Quick) { $runs = $runs | Where-Object { $_.tag -in @('raw_1000M_int64', 'ra
 foreach ($r in $runs) {
     $json = Join-Path $outDir "$($r.tag).json"
     Remove-Item $json -ErrorAction SilentlyContinue
-    $argList = "--scene $Scene --width 3840 --height 2160 --camera $Camera --fg 0 --bench $Seconds --benchOut `"$json`" $($r.args)"
+    $argList = "--scene $Scene --width 3840 --height 2160 --camera $Camera --nonInteractive --fg 0 --bench $Seconds --benchOut `"$json`" $($r.args)"
     Write-Host "== $($r.tag): $argList"
-    $p = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory (Split-Path $exe) -Wait -PassThru
-    if ($p.ExitCode -ne 0) { Write-Warning "$($r.tag): exit code $($p.ExitCode)" }
+    $p = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory (Split-Path $exe) -PassThru
+    if (-not $p.WaitForExit(($Seconds + 180) * 1000)) {
+        Stop-Process -Id $p.Id -Force
+        Write-Warning "$($r.tag): TIMEOUT (killed)"
+    }
+    elseif ($p.ExitCode -ne 0) { Write-Warning "$($r.tag): exit code $($p.ExitCode)" }
     if (-not (Test-Path $json)) { Write-Warning "$($r.tag): no bench JSON written" }
 }
 
