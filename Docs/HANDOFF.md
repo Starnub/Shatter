@@ -33,8 +33,26 @@ Code: `Game/Points/` (C++), `Game/Shaders/Points/` (HLSL, compiled by `Game/shad
 - **Generation** (`CloudDensity.cpp` + `PointGenerate.hlsl`): the CPU evaluates a noise-warped Gaussian density on a Morton-ordered grid (FastNoiseLite, MIT, vendored in `Game/ThirdParty`) and turns it into per-cell point offsets. The GPU then generates each 4096-point batch from those offsets. No billion-point sort is needed, batches are spatially coherent, and storage order is permuted inside a batch, so any prefix is a uniform subsample. Points are 4 bytes (11/11/10 bits in the batch AABB, dithered on decode). Clouds are capped at 512M points each (2 GB buffers); default 1B points in 4 clouds placed in a row in front of the camera on the first frame.
 - **Per frame**: per-cloud batch cull (8-corner frustum test, screen-footprint LOD capped at N points per pixel with energy compensation) → indirect raster (one workgroup per batch, additive) → one composite into `ProcessedOutputColor` before bloom/tonemap. GPU passes `Points_Cull`, `Points_Raster`, `Points_Composite` show up in bench JSON; `points.*` holds counts, VRAM and generation times.
 - **Accumulation modes**: int64 `InterlockedAdd` with 21/21/22-bit fixed point and stochastic rounding (default), or NVAPI `NvInterlockedAddFp16x4` into RGBA16F. Optional wave pre-aggregation (`WaveMatch` + `WaveMultiPrefixSum`) for batches that are small on screen.
-- Verified in the cloud only: all shader permutations compile with DXC 1.9.2602 at SM 6.6 and 6.9; the new C++ passes a clang syntax check against the Donut/NVRHI/jsoncpp headers. `Sample.cpp`/`SampleUI.cpp` edits have not been compiled.
-- Known M1 limits: placeholder shading (M2 does glints); points have no motion vectors yet, so frame generation will ghost them (bench with `--fg 0`); depth test uses the render-resolution jittered depth (edge shimmer possible); Hi-Z occlusion deferred to M3; generation is synchronous on the first frame.
+- **Built and measured on the 5090** (commit c8af66b, kitchen, default camera, 3840x2141 window, DLSS-RR, FG off, `Tools/bench_points.ps1`):
+
+| run | points total | rendered/frame | raster ms | throughput | frame ms |
+|---|---|---|---|---|---|
+| raw (no LOD), int64 | 250M | 133M | 1.94 | 69 G/s | 9.7 |
+| raw, int64 | 500M | 264M | 3.75 | 70 G/s | 11.4 |
+| raw, int64 | 1B | 525M | 7.23 | 73 G/s | 14.9 |
+| raw, int64 | 2B | 1.04B | 14.4 | 72 G/s | 22.2 |
+| raw, int64, no wave aggregation | 1B | 525M | 7.24 | 72 G/s | 14.9 |
+| raw, NVAPI fp16x4 | 1B | 525M | 13.7 | 38 G/s | 21.8 |
+| LOD 16 ppp, int64 | 4B (15.4 GB) | 1.04B | 14.4 | 72 G/s | 22.3 |
+
+  Cull 0.02-0.06 ms, composite 0.13 ms, PathTrace ~3.8 ms. Generation: 36 ms GPU + 0.65 s CPU for 4B points.
+  - **int64 fixed point wins** (1.9x faster than fp16x4) and stays the default.
+  - Wave aggregation makes no difference in this view (batches are rarely small on screen this close); revisit with distant clouds.
+  - The LOD cap barely bites up close: the AABB screen rectangle overestimates a batch's footprint. Tighten in M2.
+  - Throughput scales linearly, so at ~72 G/s the 4-6 ms point budget (PLAN 2) means about 300-430M rasterized points per frame at 4K. LOD has to keep it there.
+- **Bugs found on hardware and fixed**: missing UAV barrier between cull and finalize (NVRHI skips automatic barriers when the binding set doesn't change), which drew a random subset of batches each frame (visible flashing); `std::exit` teardown crashing at the end of automation runs (now `TerminateProcess` after results are written); RTXPT pausing rendering when unfocused, which stalled automation runs.
+- Known: `--debug` shows two NVRHI validation errors from existing graphics passes (framebuffer format mismatch in `setGraphicsState`, `drawIndirect` without indirect params). Not from the point system; still to track down.
+- Known M1 limits: placeholder shading (M2 does glints); points have no motion vectors yet, so frame generation will ghost them; the depth test uses the render-resolution jittered depth (edge shimmer possible); Hi-Z occlusion deferred to M3; generation is synchronous on the first frame.
 
 ### Windows checks for M1 (run from the repo root)
 ```
