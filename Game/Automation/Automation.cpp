@@ -301,7 +301,9 @@ namespace shatter
         }
 
         const bool allDone = (!ScreenshotRequested() || m_screenshotDone) && (!BenchRequested() || m_benchDone);
+        // Results are on disk at this point. TerminateProcess instead of std::exit: CRT/DLL teardown (Streamline, NGX)
+        // with the device and its threads still alive crashed with an access violation after 4K runs.
         if (Enabled() && (allDone || failed))
-            std::exit(failed ? 1 : 0);
+            TerminateProcess(GetCurrentProcess(), failed ? 1u : 0u);
     }
 }
