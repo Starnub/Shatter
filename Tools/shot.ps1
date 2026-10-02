@@ -1,8 +1,8 @@
 # SHATTER: one-call screenshot for iteration. Runs the app, captures frame N, exits.
 # Writes Tools\out\shot\<Name>.png (+ .exr) and a small <Name>.jpg preview (read the JPG: cheap to view).
 #   powershell -ExecutionPolicy Bypass -File Tools\shot.ps1 -Name test
-#   ... -Scene bistro-programmer-art.scene.json -Camera "" -Width 1920 -Height 1080 -Extra "--pointLod 0" -Crop "0,0,640,360"
-# -Camera "" skips --camera (named presets exist only where saved: Game/camera_presets.json).
+#   ... -Scene bistro-programmer-art.scene.json -NoCamera -Width 1920 -Height 1080 -Extra "--pointLod 0" -Crop "0,0,640,360"
+# -NoCamera skips --camera (named presets exist only where saved: Game/camera_presets.json); the scene's own camera is used.
 # -Crop "x,y,w,h" also writes <Name>.crop.png at 1:1 for checking fine detail.
 param(
     [string]$Name = 'shot',
@@ -13,7 +13,8 @@ param(
     [int]$Frame = 64,
     [int]$PreviewWidth = 960,
     [string]$Crop = '',
-    [string]$Extra = ''
+    [string]$Extra = '',
+    [switch]$NoCamera
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -24,7 +25,7 @@ $png = Join-Path $out "$Name.png"
 Remove-Item "$png*", (Join-Path $out "$Name.jpg") -ErrorAction SilentlyContinue
 
 $argList = "--scene $Scene --width $Width --height $Height --nonInteractive --fg 0 --screenshot `"$png`" --frame $Frame $Extra"
-if ($Camera) { $argList += " --camera $Camera" }
+if (-not $NoCamera -and $Camera) { $argList += " --camera $Camera" }
 $p = Start-Process -FilePath $exe -ArgumentList $argList -WorkingDirectory (Split-Path $exe) -PassThru
 if (-not $p.WaitForExit(120000)) { Stop-Process -Id $p.Id -Force; throw "TIMEOUT: $argList" }
 if (-not (Test-Path $png)) { throw "No screenshot written (exit code $($p.ExitCode)): $argList" }
