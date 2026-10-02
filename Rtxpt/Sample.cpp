@@ -1584,6 +1584,8 @@ void Sample::RtxdiSetupFrame(nvrhi::IFramebuffer* framebuffer, PathTracerCameraD
 
 bool Sample::ShouldRenderUnfocused()
 {
+    if (m_automation && m_automation->Enabled()) // SHATTER: bench/screenshot runs must not stall when another window has focus
+        return true;
     if (m_frameIndex < 16 || m_ui.ResetAccumulation || m_ui.ResetRealtimeCaches || m_captureScriptManager->IsDoingWork() )
     {
         // Make sure we at least run one render frame to allow expensive resource creation to happen in background, and to allow at least somewhat decent convergence so when user alt-tabs they get a nice image
