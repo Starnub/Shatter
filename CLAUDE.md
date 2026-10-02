@@ -10,7 +10,7 @@ First-person incremental game about collecting billions of points ("diamond dust
 - The old 2016 `Shatter.rar` at the repo root is unrelated. Ignore it.
 
 ## Layout
-- `Engine/`: NVIDIA RTXPT imported via `git subtree`. Keep edits minimal and mark them `// SHATTER:`.
+- Repo root: NVIDIA RTXPT, merged in with its history (remote `rtxpt`, see PLAN §3). Keep engine edits minimal and mark them `// SHATTER:`.
 - `Game/`: all Shatter code and shaders.
 - `Tools/`: bench/screenshot scripts.
 

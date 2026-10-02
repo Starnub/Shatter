@@ -34,10 +34,10 @@ You walk a crystal valley stuck at golden hour. Clouds of **diamond dust** hang 
 
 License: NVIDIA RTX SDK license. Fine for a personal project; if Shatter is ever released, it needs attribution ("contains source code provided by NVIDIA") and a notice to NVIDIA before shipping DLSS.
 
-**Repo layout**
+**Repo layout.** RTXPT depends on git submodules, which `git subtree` doesn't carry, so its history is merged straight into this repo: add it as remote `rtxpt`, merge its latest release tag with `--allow-unrelated-histories`, then `git submodule update --init --recursive`. Upstream updates become `git fetch rtxpt` plus a merge of the newer tag. Before the first merge, check for case-insensitive path collisions (Windows), e.g. our `docs/` against any `Docs/` in RTXPT.
 
 ```
-/Engine/   RTXPT imported via `git subtree` (keeps upstream pullable); edits marked `// SHATTER:`
+/          RTXPT root (engine + its submodules); edits kept minimal and marked `// SHATTER:`
 /Game/     all Shatter code: points/, world/, player/, vacuum/, audio/, hdr/, shaders/
 /Tools/    bench + screenshot scripts used by Claude Code during iteration
 /docs/     this plan
