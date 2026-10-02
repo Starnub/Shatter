@@ -418,6 +418,12 @@ namespace shatter
             commandList->setComputeState(state);
             commandList->dispatch((c.batchCount + POINT_CULL_GROUP_SIZE - 1) / POINT_CULL_GROUP_SIZE, 1, 1);
 
+            // Finalize reuses the cull binding set, and NVRHI only places automatic barriers when the binding set
+            // changes. Without this UAV barrier, finalize can read the visible count before the cull's atomics land,
+            // and the raster then draws a random subset of batches each frame (flashing).
+            commandList->setBufferState(c.args, nvrhi::ResourceStates::UnorderedAccess);
+            commandList->commitBarriers();
+
             state.pipeline = m_finalizePso;
             commandList->setComputeState(state);
             commandList->dispatch(1, 1, 1);
