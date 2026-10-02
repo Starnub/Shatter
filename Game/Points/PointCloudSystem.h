@@ -36,7 +36,7 @@ namespace shatter
         int   gridLog2 = 7;                 // density grid resolution (1 << gridLog2)^3
         float warp = 0.6f;
         float noiseFrequency = 1.5f;
-        float jitterCells = 2.0f;
+        float jitterCells = 1.0f;           // B-spline scatter kernel scale (cells)
 
         // rendering (live)
         float brightness = 1.0f;            // average scene radiance of a cloud seen face-on

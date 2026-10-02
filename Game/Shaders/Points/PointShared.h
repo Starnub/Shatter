@@ -39,7 +39,7 @@ namespace shatter
         uint   pointCount;
         uint   batchCount;
         uint   seed;
-        float  jitterCells;                 // points spread over a box this many cells wide around their cell center
+        float  jitterCells;                 // scale of the quadratic B-spline scatter kernel, in cells (1 = exact B-spline reconstruction)
         uint   _pad0;
         uint   _pad1;
     };

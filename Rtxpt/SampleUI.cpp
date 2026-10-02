@@ -835,7 +835,7 @@ void SampleUI::buildUI(void)
             ImGui::SliderInt("Density grid log2", &pts.gridLog2, 5, 9);
             ImGui::SliderFloat("Warp", &pts.warp, 0.f, 1.5f);
             ImGui::SliderFloat("Noise frequency", &pts.noiseFrequency, 0.25f, 6.f);
-            ImGui::SliderFloat("Cell jitter", &pts.jitterCells, 1.f, 3.f);
+            ImGui::SliderFloat("Scatter kernel (cells)", &pts.jitterCells, 0.5f, 3.f);
             if (ImGui::Button("Regenerate"))
                 pts.regenerate = true;
             ImGui::SameLine();

@@ -37,12 +37,22 @@ uint FindCell(uint g)
     return lo;
 }
 
+// Each cell's points are scattered around its center with a quadratic B-spline kernel (sum of three uniforms per
+// axis, support 3 cells), which reconstructs a C1-smooth density from the per-cell counts. A uniform box (what this
+// did first) only sums to a staircase: the density steps showed up as vertical and horizontal bands.
+float3 QuadraticBSplineOffset(uint h)
+{
+    const float3 a = HashToUnit3(h);
+    const float3 b = HashToUnit3(PcgHash(h ^ 0x27D4EB2Fu));
+    const float3 c = HashToUnit3(PcgHash(h ^ 0x165667B1u));
+    return a + b + c - 1.5;
+}
+
 float3 GeneratePoint(uint g)
 {
     uint cell = FindCell(g);
     float3 cellCoord = float3(MortonDecode3(cell));
-    float3 u = HashToUnit3(PcgHash(g ^ g_Gen.seed));
-    float3 local = 0.5 + (u - 0.5) * g_Gen.jitterCells;
+    float3 local = 0.5 + QuadraticBSplineOffset(PcgHash(g ^ g_Gen.seed)) * g_Gen.jitterCells;
     return g_Gen.gridMinAndCellSize.xyz + (cellCoord + local) * g_Gen.gridMinAndCellSize.w;
 }
 
