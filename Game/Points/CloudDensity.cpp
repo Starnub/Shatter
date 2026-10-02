@@ -68,7 +68,12 @@ namespace shatter
                 const float body = std::exp(-2.5f * dot(w, w));
                 float detail = std::clamp(0.55f + 0.6f * wisps.GetNoise(2.f * q.x, 2.f * q.y, 2.f * q.z), 0.f, 1.f);
                 detail *= detail;
-                density[c] = body * detail;
+                // the warp can push density out to the grid faces, where it would be cut off in straight lines:
+                // fade to zero inside the grid's inscribed sphere
+                const float r = length(q) / kGridExtent;
+                const float t = std::clamp((r - 0.7f) / 0.3f, 0.f, 1.f);
+                const float window = 1.f - t * t * (3.f - 2.f * t);
+                density[c] = body * detail * window;
             }
         };
 

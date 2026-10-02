@@ -98,10 +98,13 @@ void main(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
         {
             const uint index = b.firstPoint + s;
             const bool collected = ((t_Collected[index >> 5] >> (index & 31u)) & 1u) != 0;
+            // Independent hash streams per use. Sharing one (brightness = the y dither) put the bright points at
+            // the top of every quantization cell: a sawtooth that aliased into horizontal bands wherever the cells
+            // were close to a pixel.
             const uint h = PcgHash(index ^ g_Frame.cloudSeed);
 
             // dither inside the quantization cell so the 11/11/10-bit lattice never shows
-            const float3 p = b.aabbMin + (UnpackPointQuantized(t_Positions[index]) + HashToUnit3(h)) * quantum;
+            const float3 p = b.aabbMin + (UnpackPointQuantized(t_Positions[index]) + HashToUnit3(PcgHash(h ^ 0x68E31DA4u))) * quantum;
             const float4 clip = mul(float4(p, 1.0), g_Frame.worldToClip);
 
             if (!collected && clip.w > zNear)
@@ -120,11 +123,10 @@ void main(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
                         const float distance2 = max(dot(d, d), minDistance2);
 
                         // placeholder shading: log-uniform brightness spread (0.25x..4x) around the tint
-                        const uint h2 = PcgHash(h);
-                        const float brightness = exp2(HashToUnit(h2) * 4.0 - 2.0) * 0.5411; // mean 1
+                        const float brightness = exp2(HashToUnit(PcgHash(h ^ 0xB5297A4Du)) * 4.0 - 2.0) * 0.5411; // mean 1
                         const float3 radiance = g_Frame.tintAndScale.rgb * (brightness * scale / distance2);
 
-                        const float dither = HashToUnit(PcgHash(h2 ^ g_Frame.frameIndex));
+                        const float dither = HashToUnit(PcgHash(h ^ (g_Frame.frameIndex * 0x9E3779B9u)));
                         contribution = MakeContribution(radiance, dither);
                         pixelIndex = ip.y * g_Frame.sizes.x + ip.x;
                     }
