@@ -2010,6 +2010,8 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
     }
 
     // Environment map settings
+    if (m_currentSceneName == "shatter-void.scene.json") // SHATTER: the void is black (the scene's radianceScale is not applied)
+        m_ui.EnvironmentMapParams.Intensity = 0.f;
     if (m_ui.EnvironmentMapParams.Enabled)
     {
         float intensity = m_ui.EnvironmentMapParams.Intensity / c_envMapRadianceScale;
