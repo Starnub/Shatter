@@ -10,7 +10,9 @@
 #define POINT_DISPATCH_ROW          32768   // 2D dispatches: linear group = y * POINT_DISPATCH_ROW + x
 #define POINT_CULL_GROUP_SIZE       128
 #define POINT_COMPOSITE_TILE        8
-#define POINT_PARTICLE_CAPACITY     65536   // vacuum particles (ring)
+#define POINT_PARTICLE_CAPACITY     262144  // vacuum particles (ring)
+#define POINT_JAR_POINTS            65536   // points that draw the jar's contents
+#define POINT_JAR_OUTLINE           1024    // points that draw the jar's rims and edges
 #define POINT_PARTICLE_GROUP        256
 
 #define POINT_FLAG_AGGREGATE        0x80000000u // visible entry: batch is small on screen, pre-aggregate in the wave
@@ -65,7 +67,7 @@ namespace shatter
         // vacuum (demo D2)
         float4   vacuumDirAndCos;           // xyz: view forward, w: cos(cone half-angle)
         float4   vacuumUpAndRadius;         // xyz: view up, w: reach (m)
-        float4   vacuumParams;              // x: capture probability scale (p = x * closeness), y: dt (s), z: particle intensity (fixed units * m^2), w: unused
+        float4   vacuumParams;              // x: capture probability scale (p = x * closeness), y: dt (s), z: particle intensity (fixed units * m^2), w: points per full jar
         float4   motionParams;              // x: time (s, wrapped), y: drift amplitude (m), z: pull reach (m), zw: unused
     };
 

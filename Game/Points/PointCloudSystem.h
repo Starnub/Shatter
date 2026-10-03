@@ -29,7 +29,7 @@ namespace shatter
         bool  enabled = true;
 
         // generation (press Regenerate)
-        int   totalMillions = 512;          // points across all clouds
+        int   totalMillions = 1000;         // points across all clouds
         int   cloudCount = 1;               // raised automatically so no cloud exceeds kMaxPointsPerCloud
         float cloudRadius = 0.6f;           // m
         float cloudDistance = 6.0f;         // m in front of the anchor camera
@@ -57,8 +57,10 @@ namespace shatter
         bool  vacuumActive = false;         // input held (set by Sample each frame)
         float vacuumRadius = 0.5f;          // m
         float vacuumConeDeg = 30.f;         // half-angle around the view axis
-        float vacuumRate = 300.f;           // captured points per second while enough points are in reach
-        float particleBrightness = 4.f;     // exposed value of a particle 0.5 m away
+        float vacuumRate = 20000.f;         // captured points per second while enough points are in reach
+        float particleBrightness = 0.6f;    // exposed value of a particle 0.5 m away
+        float jarCapacity = 5.0e6f;         // collected points that fill the jar
+        bool  stackClouds = true;           // clouds share one center and density shape (one cloud past kMaxPointsPerCloud)
         bool  showHud = false;
         float driftAmplitude = 0.005f;      // m, slow coherent current through every cloud
         uint64_t statCollected = 0;         // total points vacuumed (lags a few frames)
@@ -144,6 +146,7 @@ namespace shatter
         nvrhi::BindingLayoutHandle m_vacuumLayout;
         nvrhi::ComputePipelineHandle m_capturePso;
         nvrhi::ComputePipelineHandle m_particlePso;
+        nvrhi::ComputePipelineHandle m_jarPso;
         nvrhi::BufferHandle m_vacuum;                     // 4 x uint64: collected total, candidate weight, particle head, spare
         nvrhi::BufferHandle m_particles;                  // PointParticle x POINT_PARTICLE_CAPACITY
         bool m_vacuumCleared = false;

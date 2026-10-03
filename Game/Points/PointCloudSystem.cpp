@@ -169,11 +169,13 @@ namespace shatter
             m_vacuumLayout = m_device->createBindingLayout(d);
             ShaderHandle capture = m_shaderFactory->CreateShader(vacuumPath, "main_capture", nullptr, ShaderType::Compute);
             ShaderHandle particles = m_shaderFactory->CreateShader(vacuumPath, "main_particles", nullptr, ShaderType::Compute);
+            ShaderHandle jar = m_shaderFactory->CreateShader(vacuumPath, "main_jar", nullptr, ShaderType::Compute);
+            m_jarPso = m_device->createComputePipeline(ComputePipelineDesc().setComputeShader(jar).addBindingLayout(m_vacuumLayout));
             m_capturePso = m_device->createComputePipeline(ComputePipelineDesc().setComputeShader(capture).addBindingLayout(m_vacuumLayout));
             m_particlePso = m_device->createComputePipeline(ComputePipelineDesc().setComputeShader(particles).addBindingLayout(m_vacuumLayout));
         }
 
-        if (!m_capturePso || !m_particlePso || !m_generatePso || !m_cullPso || !m_finalizePso || !m_rasterPso[0] || !m_rasterPso[1] || !m_compositePso[0] || !m_compositePso[1])
+        if (!m_capturePso || !m_particlePso || !m_jarPso || !m_generatePso || !m_cullPso || !m_finalizePso || !m_rasterPso[0] || !m_rasterPso[1] || !m_compositePso[0] || !m_compositePso[1])
             donut::log::error("Shatter points: failed to create one or more compute pipelines (see messages above)");
     }
 
@@ -223,13 +225,16 @@ namespace shatter
             cloud.batchCount = (cloud.pointCount + POINT_BATCH_SIZE - 1) / POINT_BATCH_SIZE;
             cloud.seed = 0x5EED0000u + i * 7919u;
             cloud.pointScale = kPi * settings.cloudRadius * settings.cloudRadius / float(cloud.pointCount);
+            if (settings.stackClouds)
+                cloud.pointScale /= float(cloudCount); // stacked clouds share the brightness of one
 
             CloudShape shape;
-            shape.center = m_anchorPos + forward * settings.cloudDistance + right * ((float(i) - 0.5f * float(cloudCount - 1)) * spacing);
+            const float slot = settings.stackClouds ? 0.f : (float(i) - 0.5f * float(cloudCount - 1));
+            shape.center = m_anchorPos + forward * settings.cloudDistance + right * (slot * spacing);
             shape.radius = settings.cloudRadius;
             shape.warp = settings.warp;
             shape.noiseFrequency = settings.noiseFrequency;
-            shape.seed = cloud.seed;
+            shape.seed = settings.stackClouds ? 0x5EED0000u : cloud.seed; // stacked: same density, different scatter
 
             const auto gridStart = std::chrono::steady_clock::now();
             const CloudDensityGrid grid = BuildCloudDensityGrid(shape, uint32_t(settings.gridLog2), cloud.pointCount);
@@ -430,7 +435,7 @@ namespace shatter
             const float captureScale = settings.vacuumActive ? float(std::min(1.0, targetPerFrame / std::max(m_vacuumWeight, 1.0))) : 0.f;
             fc.vacuumDirAndCos = float4(params.cameraDir, std::cos(settings.vacuumConeDeg * dm::PI_f / 180.f));
             fc.vacuumUpAndRadius = float4(params.cameraUp, settings.vacuumRadius);
-            fc.vacuumParams = float4(captureScale, params.deltaTime, settings.particleBrightness * kFixedUnitsPerExposedUnit * 0.25f, 0.f);
+            fc.vacuumParams = float4(captureScale, params.deltaTime, settings.particleBrightness * kFixedUnitsPerExposedUnit * 0.25f, settings.jarCapacity);
 
             m_time = std::fmod(m_time + params.deltaTime, 3600.0);
             fc.motionParams = float4(float(m_time), settings.driftAmplitude, 0.f, 0.f);
@@ -451,7 +456,7 @@ namespace shatter
             };
             return m_bindingCache.GetOrCreateBindingSet(d, m_vacuumLayout);
         };
-        const bool vacuumOn = settings.atomicMode == PointAtomicMode::Int64 && m_capturePso && m_particlePso;
+        const bool vacuumOn = settings.atomicMode == PointAtomicMode::Int64 && m_capturePso && m_particlePso && m_jarPso;
 
         commandList->beginMarker("Shatter Points");
 
@@ -557,6 +562,9 @@ namespace shatter
             state.bindings = { vacuumSet(m_clouds[0]) };
             commandList->setComputeState(state);
             commandList->dispatch(POINT_PARTICLE_CAPACITY / POINT_PARTICLE_GROUP, 1, 1);
+            state.pipeline = m_jarPso;
+            commandList->setComputeState(state);
+            commandList->dispatch((POINT_JAR_POINTS + POINT_JAR_OUTLINE) / POINT_PARTICLE_GROUP, 1, 1);
         }
 
         // 3. composite into the scene color and clear the accumulation target
