@@ -31,6 +31,7 @@ The user has about **$17 of usage left** and wants **at least a playable demo**.
   - Perf at 4K on the 5090: raster about 72 G points/s (1B points per frame takes 14.4 ms), cull 0.03 ms, composite 0.13 ms, PathTrace about 3.8 ms. 4B points fit in VRAM (15.4 GB).
 
 - **D1 (done, builds)**: game mode in `Rtxpt/Sample.cpp` (grep `SHATTER: game mode`). Tab toggles it; it's on by default and off in bench/screenshot runs. It captures the cursor with raw motion, holds a synthetic left button so `FirstPersonCamera` mouse-looks, hides ImGui, and moves at `m_gameMoveSpeed` (2 m/s; scroll changes it). RMB is left free for the vacuum.
+- **Void scene (default)**: `Game/Scenes/shatter-void.scene.json`, copied into `Assets\` by `build.ps1` (Assets is NVIDIA's submodule). The scene's env `radianceScale` is ignored, so `Sample.cpp` zeroes the environment intensity for this scene by name. Fixed exposure EV 3. Clouds start 6 m out. Game-mode rotate speed is .0015. Screenshots: `shot.ps1 -Scene shatter-void.scene.json -NoCamera`. Play: double-click `bin\Rtxpt.exe`.
 
 ## 3. Commands (on the PC, in `C:\dev\Shatter`)
 - **Build**: `powershell -ExecutionPolicy Bypass -File Tools\build.ps1` pulls, builds Release, and prints only errors plus `BUILD EXIT n`. Add `-Configure` after adding or removing source files (`Game/` globs its sources).
