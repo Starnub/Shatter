@@ -38,8 +38,6 @@ RWStructuredBuffer<uint64_t>    u_Accum         : register(u0);
 // Visual motion only (demo): collection and capture use the rest positions.
 //  - drift: a slow, smooth current (a few sines of position and time, so neighbours move together) plus a small
 //    per-point wander
-//  - pull: while vacuuming, points within reach in front of the camera lean toward the nozzle and spiral slightly
-//    around the view axis; a faint ripple travels inward along the funnel
 float3 AnimatePoint(float3 p, uint h)
 {
     const float t = g_Frame.motionParams.x;
@@ -53,25 +51,6 @@ float3 AnimatePoint(float3 p, uint h)
     const float3 wander = float3(sin(t * 0.9 + phase), cos(t * 0.7 + phase * 1.3), sin(t * 0.8 + phase * 0.7));
     p += drift * (0.5 * amp) + wander * (0.35 * amp);
 
-    const float pull = g_Frame.motionParams.w;
-    if (pull > 0.0)
-    {
-        const float3 cam = g_Frame.cameraPosAndNear.xyz;
-        const float3 fwd = g_Frame.vacuumDirAndCos.xyz;
-        const float3 nozzle = cam + fwd * 0.4 - g_Frame.vacuumUpAndRadius.xyz * 0.15;
-        const float3 v = nozzle - p;
-        const float dist = length(v);
-        const float reach = g_Frame.motionParams.z;
-        if (dist < reach)
-        {
-            const float3 fromCam = p - cam;
-            const float front = saturate(dot(fromCam, fwd) / max(length(fromCam), 1e-4));
-            const float falloff = (1.0 - dist / reach) * (1.0 - dist / reach);
-            const float ripple = 0.85 + 0.15 * sin(dist * 25.0 + t * 8.0); // crests travel toward the nozzle
-            const float w = pull * falloff * front * ripple;
-            p += v * w + cross(fwd, v) * (w * 0.5);
-        }
-    }
     return p;
 }
 

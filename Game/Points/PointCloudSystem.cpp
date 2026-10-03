@@ -432,11 +432,8 @@ namespace shatter
             fc.vacuumUpAndRadius = float4(params.cameraUp, settings.vacuumRadius);
             fc.vacuumParams = float4(captureScale, params.deltaTime, settings.particleBrightness * kFixedUnitsPerExposedUnit * 0.25f, 0.f);
 
-            // drift + pull: eased in over ~0.3 s, out over ~0.6 s
             m_time = std::fmod(m_time + params.deltaTime, 3600.0);
-            const float easeRate = settings.vacuumActive ? 10.f : 5.f;
-            m_pullEase += ((settings.vacuumActive ? 1.f : 0.f) - m_pullEase) * (1.f - std::exp(-easeRate * params.deltaTime));
-            fc.motionParams = float4(float(m_time), settings.driftAmplitude, settings.pullRadius, settings.pullStrength * m_pullEase);
+            fc.motionParams = float4(float(m_time), settings.driftAmplitude, 0.f, 0.f);
         }
         auto vacuumSet = [&](const Cloud& c)
         {

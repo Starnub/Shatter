@@ -66,7 +66,7 @@ void main_capture(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
         PointParticle q;
         q.position = p;
         q.age = 0.0;
-        q.velocity = (HashToUnit3(PcgHash(h ^ 0x1B56C4E9u)) - 0.5) * 0.3;
+        q.velocity = 0.0; // leaves the cloud from rest
         q.seed = h;
         u_Particles[uint(slot % POINT_PARTICLE_CAPACITY)] = q;
     }
@@ -100,8 +100,8 @@ void main_particles(uint3 dtid : SV_DispatchThreadID)
     const float3 dir = to / max(dist, 1e-4);
     const float spin = HashToUnit(PcgHash(q.seed ^ 0x7A3D9E21u)) * 2.0 - 1.0;
     const float3 swirl = cross(fwd, dir) * (spin * 1.2 * saturate(dist * 2.0));
-    const float3 desired = dir * (0.5 + 3.0 * dist) + swirl;
-    q.velocity = lerp(q.velocity, desired, 1.0 - exp(-6.0 * dt));
+    const float3 desired = dir * (0.3 + 1.5 * dist) + swirl * 0.5;
+    q.velocity = lerp(q.velocity, desired, 1.0 - exp(-2.5 * dt)); // gentle acceleration from rest
 
     const float3 prev = q.position;
     q.position += q.velocity * dt;
@@ -128,8 +128,11 @@ void main_particles(uint3 dtid : SV_DispatchThreadID)
         if (any(pixel < 0.0) || any(pixel >= g_Frame.displaySizeAndInv.xy))
             continue;
         const float3 d = p - cam;
-        // vacuumParams.z: fixed-point units * m^2 for the whole streak
-        const float3 units = color * (g_Frame.vacuumParams.z / (max(dot(d, d), minDistance2) * STREAK_SAMPLES));
+        // Starts exactly as bright as a cloud point (tintAndScale.w, as in PointRaster), then brightens to
+        // vacuumParams.z (fixed-point units * m^2) as it is drawn in, so it visibly leaves the cloud instead of popping.
+        const float glow = smoothstep(0.0, 1.0, q.age);
+        const float intensity = lerp(g_Frame.tintAndScale.w * g_Frame.fixedScale, g_Frame.vacuumParams.z, glow * glow);
+        const float3 units = lerp(g_Frame.tintAndScale.rgb, color, glow) * (intensity / (max(dot(d, d), minDistance2) * STREAK_SAMPLES));
         const float dither = HashToUnit(PcgHash(q.seed ^ (g_Frame.frameIndex * 0x9E3779B9u) ^ i));
         const uint3 c = min(uint3(units + dither), POINT_FIXED_POINT_MAX.xxx);
         const uint2 ip = uint2(pixel);

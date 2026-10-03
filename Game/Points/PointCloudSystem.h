@@ -30,7 +30,7 @@ namespace shatter
 
         // generation (press Regenerate)
         int   totalMillions = 1000;         // points across all clouds
-        int   cloudCount = 4;               // raised automatically so no cloud exceeds kMaxPointsPerCloud
+        int   cloudCount = 2;               // raised automatically so no cloud exceeds kMaxPointsPerCloud
         float cloudRadius = 0.75f;          // m
         float cloudDistance = 6.0f;         // m in front of the anchor camera
         int   gridLog2 = 7;                 // density grid resolution (1 << gridLog2)^3
@@ -39,7 +39,7 @@ namespace shatter
         float jitterCells = 1.0f;           // B-spline scatter kernel scale (cells)
 
         // rendering (live)
-        float brightness = 1.0f;            // average scene radiance of a cloud seen face-on
+        float brightness = 2.0f;            // average scene radiance of a cloud seen face-on
         dm::float3 tint = dm::float3(0.85f, 0.92f, 1.0f);
         PointAtomicMode atomicMode = PointAtomicMode::Int64;
         bool  lod = true;
@@ -61,8 +61,6 @@ namespace shatter
         float particleBrightness = 4.f;     // exposed value of a particle 0.5 m away
         bool  showHud = false;
         float driftAmplitude = 0.005f;      // m, slow coherent current through every cloud
-        float pullRadius = 1.2f;            // m, points inside are drawn toward the nozzle while vacuuming (visual only)
-        float pullStrength = 0.1f;          // fraction of the distance to the nozzle at the closest points
         uint64_t statCollected = 0;         // total points vacuumed (lags a few frames)
 
         // stats (filled by PointCloudSystem, read by UI and bench JSON)
@@ -150,7 +148,6 @@ namespace shatter
         nvrhi::BufferHandle m_particles;                  // PointParticle x POINT_PARTICLE_CAPACITY
         bool m_vacuumCleared = false;
         double m_time = 0.0;
-        float m_pullEase = 0.f;
         double m_vacuumWeight = 0.0;                      // last read candidate weight (closeness-weighted points in reach)
 
         nvrhi::BufferHandle m_generateConstants;
