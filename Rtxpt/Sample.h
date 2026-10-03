@@ -239,6 +239,8 @@ private:
     bool                                        m_gameModeApplied = false;  // active (automation runs stay out)
     float                                       m_gameMoveSpeed = 2.0f;     // m/s; scroll adjusts, Shift x3
     void                                        ApplyGameMode();
+    bool                                        m_vacuumMouseHeld = false;  // RMB
+    bool                                        m_vacuumKeyHeld = false;    // F
     uint                                        m_selectedCameraIndex = 0;  // 0 is first person camera, the rest (if any) are scene cameras
 
     // device setup

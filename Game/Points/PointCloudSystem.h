@@ -53,6 +53,15 @@ namespace shatter
         bool  regenerate = false;
         bool  reanchor = false;             // regenerate around the current camera
 
+        // vacuum (demo D2)
+        bool  vacuumActive = false;         // input held (set by Sample each frame)
+        float vacuumRadius = 0.5f;          // m
+        float vacuumConeDeg = 30.f;         // half-angle around the view axis
+        float vacuumRate = 300.f;           // captured points per second while enough points are in reach
+        float particleBrightness = 4.f;     // exposed value of a particle 0.5 m away
+        bool  showHud = false;
+        uint64_t statCollected = 0;         // total points vacuumed (lags a few frames)
+
         // stats (filled by PointCloudSystem, read by UI and bench JSON)
         uint64_t statTotalPoints = 0;
         uint32_t statClouds = 0;
@@ -76,6 +85,9 @@ namespace shatter
         dm::uint2 renderSize;
         float exposure = 1.f;                       // scalar exposure, sets the fixed-point scale
         uint32_t frameIndex = 0;
+        dm::float3 cameraDir = dm::float3(0.f, 0.f, -1.f);
+        dm::float3 cameraUp = dm::float3(0.f, 1.f, 0.f);
+        float deltaTime = 1.f / 120.f;
     };
 
     class PointCloudSystem
@@ -128,10 +140,17 @@ namespace shatter
         nvrhi::ComputePipelineHandle m_finalizePso;
         nvrhi::ComputePipelineHandle m_rasterPso[2];
         nvrhi::ComputePipelineHandle m_compositePso[2];
+        nvrhi::BindingLayoutHandle m_vacuumLayout;
+        nvrhi::ComputePipelineHandle m_capturePso;
+        nvrhi::ComputePipelineHandle m_particlePso;
+        nvrhi::BufferHandle m_vacuum;                     // 4 x uint64: collected total, candidate weight, particle head, spare
+        nvrhi::BufferHandle m_particles;                  // PointParticle x POINT_PARTICLE_CAPACITY
+        bool m_vacuumCleared = false;
+        double m_vacuumWeight = 0.0;                      // last read candidate weight (closeness-weighted points in reach)
 
         nvrhi::BufferHandle m_generateConstants;
         nvrhi::BufferHandle m_frameConstants;
-        nvrhi::BufferHandle m_stats;                      // 2 x uint64
+        nvrhi::BufferHandle m_stats;                      // 2 x uint64 (readback: stats, then the 4 vacuum words)
         static constexpr int kReadbackRing = 4;
         std::array<nvrhi::BufferHandle, kReadbackRing> m_statsReadback;
         std::array<bool, kReadbackRing> m_readbackPending = {};

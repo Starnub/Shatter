@@ -691,6 +691,10 @@ bool Sample::KeyboardUpdate(int key, int scancode, int action, int mods)
         m_gameMode = !m_gameMode;
         return true;
     }
+    if (key == GLFW_KEY_F) // SHATTER: vacuum (alternative to RMB)
+        m_vacuumKeyHeld = (action != GLFW_RELEASE);
+    if (key == GLFW_KEY_R && action == GLFW_PRESS && mods == 0 && m_gameModeApplied) // SHATTER: respawn the clouds
+        m_ui.Points.regenerate = true;
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS && mods != GLFW_MOD_CONTROL && mods != GLFW_MOD_ALT)
     {
         m_ui.EnableAnimations = !m_ui.EnableAnimations;
@@ -740,6 +744,8 @@ bool Sample::MouseButtonUpdate(int button, int action, int mods)
     if (!(m_sampleGame && m_sampleGame->CameraActive()) && !m_gameModeApplied) // SHATTER: game mode holds a synthetic left button
         m_camera.MouseButtonUpdate(button, action, mods);
     if (m_sampleGame)   m_sampleGame->MouseButtonUpdate(button, action, mods);
+    if (button == GLFW_MOUSE_BUTTON_RIGHT) // SHATTER: vacuum
+        m_vacuumMouseHeld = (action == GLFW_PRESS);
 
     if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_2 && !m_gameModeApplied) // SHATTER: RMB is the vacuum in game mode
     {
@@ -784,6 +790,7 @@ void Sample::ApplyGameMode()
     m_camera.MouseButtonUpdate(GLFW_MOUSE_BUTTON_LEFT, want ? GLFW_PRESS : GLFW_RELEASE, 0);
     m_camera.SetRotateSpeed(want ? .0015f : .003f); // raw motion: half the desktop rate
     m_ui.ShowUI = !want;
+    m_ui.Points.showHud = want;
 }
 
 void Sample::Animate(float fElapsedTimeSeconds)
@@ -2289,6 +2296,10 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
             points.renderSize = m_renderSize;
             points.exposure = autoExposure * (exposureTransform[0][0] + exposureTransform[1][1] + exposureTransform[2][2]) / 3.f;
             points.frameIndex = uint32_t(m_frameIndex);
+            points.cameraDir = m_view->GetViewDirection();
+            points.cameraUp = m_camera.GetUp();
+            points.deltaTime = std::clamp(m_lastDeltaTime, 1e-4f, 0.1f);
+            m_ui.Points.vacuumActive = m_gameModeApplied && (m_vacuumMouseHeld || m_vacuumKeyHeld);
             m_points->Render(m_commandList, points, m_ui.Points, &m_automation->Profiler());
         }
     }

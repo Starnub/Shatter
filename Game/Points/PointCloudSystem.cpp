@@ -55,10 +55,12 @@ namespace shatter
         m_frameConstants = m_device->createBuffer(cb);
 
         m_stats = CreateStructuredBuffer(m_device, 2 * sizeof(uint64_t), sizeof(uint64_t), "PointStats");
+        m_vacuum = CreateStructuredBuffer(m_device, 4 * sizeof(uint64_t), sizeof(uint64_t), "PointVacuum");
+        m_particles = CreateStructuredBuffer(m_device, uint64_t(POINT_PARTICLE_CAPACITY) * sizeof(PointParticle), sizeof(PointParticle), "PointParticles");
         for (nvrhi::BufferHandle& rb : m_statsReadback)
         {
             nvrhi::BufferDesc d;
-            d.byteSize = 2 * sizeof(uint64_t);
+            d.byteSize = 6 * sizeof(uint64_t);
             d.cpuAccess = nvrhi::CpuAccessMode::Read;
             d.debugName = "PointStatsReadback";
             d.initialState = nvrhi::ResourceStates::CopyDest;
@@ -149,7 +151,29 @@ namespace shatter
             m_compositePso[mode] = m_device->createComputePipeline(ComputePipelineDesc().setComputeShader(compositeCs).addBindingLayout(m_compositeLayout[mode]));
         }
 
-        if (!m_generatePso || !m_cullPso || !m_finalizePso || !m_rasterPso[0] || !m_rasterPso[1] || !m_compositePso[0] || !m_compositePso[1])
+        {
+            const char* vacuumPath = "shatter/Shaders/Points/PointVacuum.hlsl";
+            BindingLayoutDesc d;
+            d.visibility = ShaderType::Compute;
+            d.bindings = {
+                BindingLayoutItem::VolatileConstantBuffer(0),
+                BindingLayoutItem::StructuredBuffer_SRV(0),
+                BindingLayoutItem::StructuredBuffer_SRV(1),
+                BindingLayoutItem::StructuredBuffer_SRV(2),
+                BindingLayoutItem::StructuredBuffer_SRV(3),
+                BindingLayoutItem::StructuredBuffer_UAV(0),
+                BindingLayoutItem::StructuredBuffer_UAV(1),
+                BindingLayoutItem::StructuredBuffer_UAV(2),
+                BindingLayoutItem::StructuredBuffer_UAV(3)
+            };
+            m_vacuumLayout = m_device->createBindingLayout(d);
+            ShaderHandle capture = m_shaderFactory->CreateShader(vacuumPath, "main_capture", nullptr, ShaderType::Compute);
+            ShaderHandle particles = m_shaderFactory->CreateShader(vacuumPath, "main_particles", nullptr, ShaderType::Compute);
+            m_capturePso = m_device->createComputePipeline(ComputePipelineDesc().setComputeShader(capture).addBindingLayout(m_vacuumLayout));
+            m_particlePso = m_device->createComputePipeline(ComputePipelineDesc().setComputeShader(particles).addBindingLayout(m_vacuumLayout));
+        }
+
+        if (!m_capturePso || !m_particlePso || !m_generatePso || !m_cullPso || !m_finalizePso || !m_rasterPso[0] || !m_rasterPso[1] || !m_compositePso[0] || !m_compositePso[1])
             donut::log::error("Shatter points: failed to create one or more compute pipelines (see messages above)");
     }
 
@@ -327,6 +351,8 @@ namespace shatter
             return;
         settings.statRenderedPoints = data[0];
         settings.statVisibleBatches = data[1];
+        settings.statCollected = data[2];
+        m_vacuumWeight = double(data[3]) / 256.0;
         m_device->unmapBuffer(m_statsReadback[slot]);
 
         m_renderedHistory[m_renderedHistoryNext] = settings.statRenderedPoints;
@@ -391,6 +417,39 @@ namespace shatter
         const uint64_t zeros[2] = { 0, 0 };
         commandList->writeBuffer(m_stats, zeros, sizeof(zeros));
 
+        // vacuum: the capture probability is adapted (a few frames late) so captures hit vacuumRate
+        if (!m_vacuumCleared)
+        {
+            commandList->clearBufferUInt(m_vacuum, 0);
+            commandList->clearBufferUInt(m_particles, 0xBF800000u); // -1.0f everywhere: every particle dead
+            m_vacuumCleared = true;
+        }
+        commandList->writeBuffer(m_vacuum, zeros, sizeof(uint64_t), sizeof(uint64_t)); // candidate weight
+        {
+            const float targetPerFrame = settings.vacuumRate * params.deltaTime;
+            const float captureScale = settings.vacuumActive ? float(std::min(1.0, targetPerFrame / std::max(m_vacuumWeight, 1.0))) : 0.f;
+            fc.vacuumDirAndCos = float4(params.cameraDir, std::cos(settings.vacuumConeDeg * dm::PI_f / 180.f));
+            fc.vacuumUpAndRadius = float4(params.cameraUp, settings.vacuumRadius);
+            fc.vacuumParams = float4(captureScale, params.deltaTime, settings.particleBrightness * kFixedUnitsPerExposedUnit * 0.25f, 0.f);
+        }
+        auto vacuumSet = [&](const Cloud& c)
+        {
+            nvrhi::BindingSetDesc d;
+            d.bindings = {
+                nvrhi::BindingSetItem::ConstantBuffer(0, m_frameConstants),
+                nvrhi::BindingSetItem::StructuredBuffer_SRV(0, c.batches),
+                nvrhi::BindingSetItem::StructuredBuffer_SRV(1, c.positions),
+                nvrhi::BindingSetItem::StructuredBuffer_SRV(2, c.visible),
+                nvrhi::BindingSetItem::StructuredBuffer_SRV(3, c.count),
+                nvrhi::BindingSetItem::StructuredBuffer_UAV(0, c.collected),
+                nvrhi::BindingSetItem::StructuredBuffer_UAV(1, m_particles),
+                nvrhi::BindingSetItem::StructuredBuffer_UAV(2, m_vacuum),
+                nvrhi::BindingSetItem::StructuredBuffer_UAV(3, m_accumInt64)
+            };
+            return m_bindingCache.GetOrCreateBindingSet(d, m_vacuumLayout);
+        };
+        const bool vacuumOn = settings.atomicMode == PointAtomicMode::Int64 && m_capturePso && m_particlePso;
+
         commandList->beginMarker("Shatter Points");
 
         // 1. cull + LOD for every cloud. Stats are only touched by atomics, so no UAV barriers between clouds.
@@ -431,6 +490,23 @@ namespace shatter
         commandList->setEnableUavBarriersForBuffer(m_stats, true);
         if (profiler) profiler->End(commandList);
 
+        // 1b. vacuum capture (runs while idle too, to measure the points in reach)
+        if (vacuumOn)
+        {
+            if (profiler) profiler->Begin(commandList, "Points_Vacuum");
+            for (const Cloud& c : m_clouds)
+            {
+                cloudConstants(c);
+                nvrhi::ComputeState state;
+                state.pipeline = m_capturePso;
+                state.bindings = { vacuumSet(c) };
+                state.indirectParams = c.args;
+                commandList->setComputeState(state);
+                commandList->dispatchIndirect(0);
+            }
+            if (profiler) profiler->End(commandList);
+        }
+
         // 2. raster. Clouds only add into the accumulation target with atomics, so no UAV barriers between them.
         if (profiler) profiler->Begin(commandList, "Points_Raster");
         if (settings.atomicMode == PointAtomicMode::Int64)
@@ -469,6 +545,17 @@ namespace shatter
             commandList->setEnableUavBarriersForTexture(m_accumFp16, true);
         if (profiler) profiler->End(commandList);
 
+        // 2b. vacuum particles: move and draw into the accumulation target
+        if (vacuumOn)
+        {
+            cloudConstants(m_clouds[0]);
+            nvrhi::ComputeState state;
+            state.pipeline = m_particlePso;
+            state.bindings = { vacuumSet(m_clouds[0]) };
+            commandList->setComputeState(state);
+            commandList->dispatch(POINT_PARTICLE_CAPACITY / POINT_PARTICLE_GROUP, 1, 1);
+        }
+
         // 3. composite into the scene color and clear the accumulation target
         if (profiler) profiler->Begin(commandList, "Points_Composite");
         {
@@ -492,6 +579,7 @@ namespace shatter
         commandList->endMarker();
 
         commandList->copyBuffer(m_statsReadback[m_readbackSlot], 0, m_stats, 0, sizeof(zeros));
+        commandList->copyBuffer(m_statsReadback[m_readbackSlot], sizeof(zeros), m_vacuum, 0, 4 * sizeof(uint64_t));
         m_readbackPending[m_readbackSlot] = true;
         m_readbackSlot = (m_readbackSlot + 1) % kReadbackRing;
     }

@@ -393,6 +393,23 @@ void SampleUI::DLSSFGSelectorUI()
 
 void SampleUI::buildUI(void)
 {
+    if (m_ui.Points.showHud) // SHATTER: game HUD (demo D3): collected count
+    {
+        std::string digits = std::to_string(m_ui.Points.statCollected), text;
+        for (size_t i = 0; i < digits.size(); i++)
+        {
+            if (i > 0 && (digits.size() - i) % 3 == 0)
+                text += ',';
+            text += digits[i];
+        }
+        ImGui::SetNextWindowPos(ImVec2(32.f, 32.f));
+        ImGui::SetNextWindowBgAlpha(0.3f);
+        ImGui::Begin("##shatter_hud", nullptr, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoInputs |
+                     ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav);
+        ImGui::SetWindowFontScale(2.5f);
+        ImGui::Text("%s", text.c_str());
+        ImGui::End();
+    }
     if (!m_ui.ShowUI)
         return;
 

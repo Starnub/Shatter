@@ -10,6 +10,8 @@
 #define POINT_DISPATCH_ROW          32768   // 2D dispatches: linear group = y * POINT_DISPATCH_ROW + x
 #define POINT_CULL_GROUP_SIZE       128
 #define POINT_COMPOSITE_TILE        8
+#define POINT_PARTICLE_CAPACITY     65536   // vacuum particles (ring)
+#define POINT_PARTICLE_GROUP        256
 
 #define POINT_FLAG_AGGREGATE        0x80000000u // visible entry: batch is small on screen, pre-aggregate in the wave
 #define POINT_COUNT_MASK            0x7FFFFFFFu
@@ -60,10 +62,23 @@ namespace shatter
         uint     lodEnabled;
         uint     frameIndex;
         uint     cloudSeed;
+        // vacuum (demo D2)
+        float4   vacuumDirAndCos;           // xyz: view forward, w: cos(cone half-angle)
+        float4   vacuumUpAndRadius;         // xyz: view up, w: reach (m)
+        float4   vacuumParams;              // x: capture probability scale (p = x * closeness), y: dt (s), z: particle intensity (fixed units * m^2), w: unused
+    };
+
+    struct PointParticle                    // 32 bytes; dead when !(age >= 0)
+    {
+        float3 position;
+        float  age;
+        float3 velocity;
+        uint   seed;
     };
 
 #ifdef __cplusplus
     static_assert(sizeof(PointBatch) == 32, "PointBatch layout");
+    static_assert(sizeof(PointParticle) == 32, "PointParticle layout");
     static_assert(sizeof(PointGenerateConstants) % 16 == 0, "cbuffer size");
     static_assert(sizeof(PointFrameConstants) % 16 == 0, "cbuffer size");
 }
