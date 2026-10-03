@@ -234,6 +234,11 @@ private:
     std::shared_ptr<ExtendedScene>              m_scene;
     double                                      m_sceneTime = 0.;           // if m_ui.LoopLongestAnimation then it loops with longest animation
     float                                       m_lastDeltaTime = 0.0f;
+    // SHATTER: game mode (Tab): captured mouse-look, hidden UI, walking pace
+    bool                                        m_gameMode = true;          // requested
+    bool                                        m_gameModeApplied = false;  // active (automation runs stay out)
+    float                                       m_gameMoveSpeed = 2.0f;     // m/s; scroll adjusts, Shift x3
+    void                                        ApplyGameMode();
     uint                                        m_selectedCameraIndex = 0;  // 0 is first person camera, the rest (if any) are scene cameras
 
     // device setup

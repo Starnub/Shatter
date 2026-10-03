@@ -686,6 +686,11 @@ bool Sample::KeyboardUpdate(int key, int scancode, int action, int mods)
         return true;
 
 
+    if (key == GLFW_KEY_TAB && action == GLFW_PRESS) // SHATTER: game mode toggle
+    {
+        m_gameMode = !m_gameMode;
+        return true;
+    }
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS && mods != GLFW_MOD_CONTROL && mods != GLFW_MOD_ALT)
     {
         m_ui.EnableAnimations = !m_ui.EnableAnimations;
@@ -732,11 +737,11 @@ bool Sample::MouseButtonUpdate(int button, int action, int mods)
         if (m_zoomTool->MouseButtonUpdate(button, action, mods))
             return true;
 
-    if (!(m_sampleGame && m_sampleGame->CameraActive()))
+    if (!(m_sampleGame && m_sampleGame->CameraActive()) && !m_gameModeApplied) // SHATTER: game mode holds a synthetic left button
         m_camera.MouseButtonUpdate(button, action, mods);
     if (m_sampleGame)   m_sampleGame->MouseButtonUpdate(button, action, mods);
 
-    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_2)
+    if (action == GLFW_PRESS && button == GLFW_MOUSE_BUTTON_2 && !m_gameModeApplied) // SHATTER: RMB is the vacuum in game mode
     {
         m_pick = true;
         m_ui.DebugPixel = m_pickPosition;
@@ -757,9 +762,27 @@ bool Sample::MouseScrollUpdate(double xoffset, double yoffset)
     if (!(m_sampleGame && m_sampleGame->CameraActive()))
     {
         //m_camera.MouseScrollUpdate(xoffset, yoffset);
-        m_ui.CameraMoveSpeed *= 1.0f + yoffset*0.1f;
+        float& speed = m_gameModeApplied ? m_gameMoveSpeed : m_ui.CameraMoveSpeed; // SHATTER
+        speed *= 1.0f + float(yoffset)*0.1f;
     }
     return true;
+}
+
+// SHATTER: game mode. A disabled cursor gives unbounded virtual cursor positions, and a held synthetic left
+// button makes FirstPersonCamera turn on every mouse move. Bench/screenshot runs never enter it.
+void Sample::ApplyGameMode()
+{
+    const bool automation = m_cmdLine.bench > 0.f || !m_cmdLine.screenshot.empty();
+    const bool want = m_gameMode && !automation;
+    if (want == m_gameModeApplied)
+        return;
+    m_gameModeApplied = want;
+    GLFWwindow* window = GetDeviceManager()->GetWindow();
+    glfwSetInputMode(window, GLFW_CURSOR, want ? GLFW_CURSOR_DISABLED : GLFW_CURSOR_NORMAL);
+    if (glfwRawMouseMotionSupported())
+        glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, want ? GLFW_TRUE : GLFW_FALSE);
+    m_camera.MouseButtonUpdate(GLFW_MOUSE_BUTTON_LEFT, want ? GLFW_PRESS : GLFW_RELEASE, 0);
+    m_ui.ShowUI = !want;
 }
 
 void Sample::Animate(float fElapsedTimeSeconds)
@@ -771,7 +794,8 @@ void Sample::Animate(float fElapsedTimeSeconds)
 
     m_lastDeltaTime = fElapsedTimeSeconds;
 
-    m_camera.SetMoveSpeed(m_ui.CameraMoveSpeed);
+    ApplyGameMode(); // SHATTER
+    m_camera.SetMoveSpeed(m_gameModeApplied ? m_gameMoveSpeed : m_ui.CameraMoveSpeed);
 
     if( m_ui.ShaderAndACRefreshDelayedRequest > 0 )
     {
