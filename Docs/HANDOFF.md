@@ -11,7 +11,7 @@ The user has about **$17 of usage left** and wants **at least a playable demo**.
 - Keep chat replies short. Commit and push after each working step (the cloud container is ephemeral).
 
 ## 1. Setup
-- **Repo** `starnub/shatter`, branch `claude/vigilant-noether-3kj2qi`. The cloud session edits in `/home/user/Shatter`, commits and pushes. The PC pulls and builds.
+- **Repo** `starnub/shatter`, branch `claude/admiring-goodall-lagxs1` (continues `claude/vigilant-noether-3kj2qi`; the PC clone is checked out on it). The cloud session edits in `/home/user/Shatter`, commits and pushes. The PC pulls and builds.
 - **PC**: Windows 11, RTX 5090 32 GB, 9800X3D, LG C2 42" (HDR, 4K 120 Hz). Clone at `C:\dev\Shatter`, build dir `build\`, exe `bin\Rtxpt.exe`.
 - **Remote access**: Desktop Commander MCP, tools `mcp__Remote_Desktop_Commander__*` (load with ToolSearch: `select:mcp__Remote_Desktop_Commander__start_process,mcp__Remote_Desktop_Commander__read_file,mcp__Remote_Desktop_Commander__read_process_output,mcp__Remote_Desktop_Commander__list_directory`). Device "Starnub". Use `shell: "powershell.exe"`.
   - If calls time out or the device is offline: ask the user to run `npx.cmd @wonderwhy-er/desktop-commander@latest remote` in PowerShell and keep that window open.
@@ -29,6 +29,8 @@ The user has about **$17 of usage left** and wants **at least a playable demo**.
   - Settings: `shatter::PointSettings` (`PointCloudSystem.h`), stored in `m_ui.Points`, with a UI panel "Shatter: points" in `Rtxpt/SampleUI.cpp`.
   - Shading is a placeholder: tint × random brightness ÷ d².
   - Perf at 4K on the 5090: raster about 72 G points/s (1B points per frame takes 14.4 ms), cull 0.03 ms, composite 0.13 ms, PathTrace about 3.8 ms. 4B points fit in VRAM (15.4 GB).
+
+- **D1 (done, builds)**: game mode in `Rtxpt/Sample.cpp` (grep `SHATTER: game mode`). Tab toggles it; it's on by default and off in bench/screenshot runs. It captures the cursor with raw motion, holds a synthetic left button so `FirstPersonCamera` mouse-looks, hides ImGui, and moves at `m_gameMoveSpeed` (2 m/s; scroll changes it). RMB is left free for the vacuum.
 
 ## 3. Commands (on the PC, in `C:\dev\Shatter`)
 - **Build**: `powershell -ExecutionPolicy Bypass -File Tools\build.ps1` pulls, builds Release, and prints only errors plus `BUILD EXIT n`. Add `-Configure` after adding or removing source files (`Game/` globs its sources).
