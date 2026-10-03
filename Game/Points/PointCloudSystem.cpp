@@ -603,6 +603,7 @@ namespace shatter
         j["total_points"] = Json::UInt64(s.statTotalPoints);
         j["rendered_points_avg"] = s.statRenderedPointsAvg;
         j["rendered_points_last"] = Json::UInt64(s.statRenderedPoints);
+        j["collected"] = Json::UInt64(s.statCollected);
         j["visible_batches_last"] = Json::UInt64(s.statVisibleBatches);
         j["gpu_mb"] = double(s.statGpuBytes) / (1024.0 * 1024.0);
         j["generate_cpu_ms"] = s.statGenerateCpuMs;
