@@ -35,7 +35,7 @@ The user has about **$17 of usage left** and wants **at least a playable demo**.
 
 - **D2/D3/D5 (built, awaiting play test)**: `Game/Shaders/Points/PointVacuum.hlsl` (`main_capture`, `main_particles`), wired in `PointCloudSystem::Render` (capture after cull, particles after raster; int64 mode only). Capture probability adapts on the CPU from the read-back candidate weight so captures hit `vacuumRate` (300/s) within `vacuumRadius` 0.5 m / `vacuumConeDeg` 30. Particle ring of 65536 in `m_particles`; totals in `m_vacuum` (read back with the stats). Input: RMB or F (E is camera up), R respawns. HUD in `SampleUI::buildUI` (`Points.showHud`). Tuning knobs are in `PointSettings`.
 
-- **Motion (built)**: `AnimatePoint` in `PointRaster.hlsl` (visual only; capture uses rest positions): coherent drift (`driftAmplitude` 5 mm) and, while vacuuming, a pull toward the nozzle (`pullRadius` 1.2 m, `pullStrength` 0.1, eased in CPU-side `m_pullEase`). Bench in the void at the default window size: raster 7.2 ms for 972M points, vacuum capture 0.17 ms.
+- **Motion/cloud (built)**: `AnimatePoint` in `PointRaster.hlsl` is drift only (5 mm coherent current; the user liked it). A visual pull toward the nozzle was tried and removed: it looked bouncy and fake. Particles start at rest with a cloud point's brightness and glow up over ~1 s, so they visibly leave the cloud. Defaults: one cloud of 512M points (the per-cloud cap, 2 GB of positions), radius 0.6 m, brightness 2.
 
 ## 3. Commands (on the PC, in `C:\dev\Shatter`)
 - **Build**: `powershell -ExecutionPolicy Bypass -File Tools\build.ps1` pulls, builds Release, and prints only errors plus `BUILD EXIT n`. Add `-Configure` after adding or removing source files (`Game/` globs its sources).
