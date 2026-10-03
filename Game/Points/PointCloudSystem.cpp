@@ -438,7 +438,7 @@ namespace shatter
             fc.vacuumParams = float4(captureScale, params.deltaTime, settings.particleBrightness * kFixedUnitsPerExposedUnit * 0.25f, settings.jarCapacity);
 
             m_time = std::fmod(m_time + params.deltaTime, 3600.0);
-            fc.motionParams = float4(float(m_time), settings.driftAmplitude, 0.f, 0.f);
+            fc.motionParams = float4(float(m_time), settings.driftAmplitude, 0.5f * float(params.displaySize.y) * params.projScaleY, settings.particleRadius);
         }
         auto vacuumSet = [&](const Cloud& c)
         {

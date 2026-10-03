@@ -68,7 +68,7 @@ namespace shatter
         float4   vacuumDirAndCos;           // xyz: view forward, w: cos(cone half-angle)
         float4   vacuumUpAndRadius;         // xyz: view up, w: reach (m)
         float4   vacuumParams;              // x: capture probability scale (p = x * closeness), y: dt (s), z: particle intensity (fixed units * m^2), w: points per full jar
-        float4   motionParams;              // x: time (s, wrapped), y: drift amplitude (m), z: pull reach (m), zw: unused
+        float4   motionParams;              // x: time (s, wrapped), y: drift amplitude (m), z: pixels per metre at 1 m depth, w: particle radius (m)
     };
 
     struct PointParticle                    // 32 bytes; dead when !(age >= 0)

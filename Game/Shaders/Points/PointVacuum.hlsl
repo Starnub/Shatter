@@ -82,7 +82,6 @@ void main_capture(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
     }
 }
 
-#define STREAK_SAMPLES 2
 
 // The jar: held in the lower right of the view, axis along the view's up. Particles fly into its mouth.
 struct Jar { float3 bottom; float3 axis; float3 right; float3 back; float height; float radius; };
@@ -121,6 +120,50 @@ void DrawPoint(float3 p, float3 color, float intensity, uint seed)
     InterlockedAdd(u_Accum[ip.y * g_Frame.sizes.x + ip.x], (uint64_t)c.x | ((uint64_t)c.y << 21) | ((uint64_t)c.z << 42));
 }
 
+// Soft disc of a given world radius: projected size grows as it approaches (the depth cue single pixels lack).
+// The weights are normalized, so a disc carries exactly the energy of a single-pixel point.
+void DrawSplat(float3 p, float3 color, float intensity, uint seed, float worldRadius)
+{
+    const float4 clip = mul(float4(p, 1.0), g_Frame.worldToClip);
+    if (clip.w <= g_Frame.cameraPosAndNear.w)
+        return;
+    const float r = min(worldRadius * g_Frame.motionParams.z / clip.w, 4.0);
+    if (r < 0.7)
+    {
+        DrawPoint(p, color, intensity, seed);
+        return;
+    }
+    const float2 pixel = (clip.xy / clip.w * float2(0.5, -0.5) + 0.5) * g_Frame.displaySizeAndInv.xy;
+    const float3 d = p - g_Frame.cameraPosAndNear.xyz;
+    const float minDistance2 = g_Frame.renderScaleAndBias.w * g_Frame.renderScaleAndBias.w;
+    const float3 units = color * (intensity / max(dot(d, d), minDistance2));
+    const int R = int(ceil(r));
+    const float invR2 = 1.0 / (r * r);
+    float sum = 0.0;
+    for (int y = -R; y <= R; y++)
+        for (int x = -R; x <= R; x++)
+        {
+            const float2 o = floor(pixel) + float2(x, y) + 0.5 - pixel;
+            sum += saturate(1.0 - dot(o, o) * invR2);
+        }
+    const float dither = HashToUnit(PcgHash(seed ^ (g_Frame.frameIndex * 0x9E3779B9u)));
+    for (int y2 = -R; y2 <= R; y2++)
+        for (int x2 = -R; x2 <= R; x2++)
+        {
+            const float2 o = floor(pixel) + float2(x2, y2) + 0.5 - pixel;
+            const float w = saturate(1.0 - dot(o, o) * invR2) / sum;
+            const int2 ip = int2(floor(pixel)) + int2(x2, y2);
+            if (w <= 0.0 || any(ip < 0) || any(ip >= int2(g_Frame.sizes.xy)))
+                continue;
+            const uint3 c = min(uint3(units * w + dither), POINT_FIXED_POINT_MAX.xxx);
+            if (all(c == 0u))
+                continue;
+            InterlockedAdd(u_Accum[ip.y * g_Frame.sizes.x + ip.x], (uint64_t)c.x | ((uint64_t)c.y << 21) | ((uint64_t)c.z << 42));
+        }
+}
+
+float JarFill() { return saturate(float(u_Vacuum[0]) / max(g_Frame.vacuumParams.w, 1.0)); }
+
 [numthreads(POINT_PARTICLE_GROUP, 1, 1)]
 void main_particles(uint3 dtid : SV_DispatchThreadID)
 {
@@ -131,37 +174,46 @@ void main_particles(uint3 dtid : SV_DispatchThreadID)
     const float dt = g_Frame.vacuumParams.y;
     const float3 fwd = g_Frame.vacuumDirAndCos.xyz;
     const Jar jar = GetJar();
-    const float3 mouth = jar.bottom + jar.axis * jar.height;
 
-    // sink flow: speed ~ 1/d^2 (slow far away, fast near the mouth), reached with a little inertia
-    const float3 to = mouth - q.position;
+    // where the particle is relative to the jar, and its resting spot on the current fill surface
+    const float3 rel = q.position - jar.bottom;
+    const float along = dot(rel, jar.axis);
+    const float radial = length(rel - jar.axis * along);
+    const float a = HashToUnit(PcgHash(q.seed ^ 0x9B05688Cu)) * 6.2831853;
+    const float rr = sqrt(HashToUnit(PcgHash(q.seed ^ 0x1F83D9ABu))) * jar.radius * 0.85;
+    const float3 settle = jar.bottom + jar.axis * (JarFill() * jar.height * 0.97 + 0.002) + (jar.right * cos(a) + jar.back * sin(a)) * rr;
+
+    const bool inJar = radial < jar.radius * 0.9 && along < jar.height + 0.015;
+    const bool overMouth = radial < jar.radius * 0.7 && along >= jar.height;
+    const float3 target = (inJar || overMouth) ? settle : jar.bottom + jar.axis * (jar.height + 0.03);
+
+    // sink flow toward the target: slow far away, fast close in; inside the jar the particles drift down gently
+    const float3 to = target - q.position;
     const float dist = length(to);
     const float3 dir = to / max(dist, 1e-4);
-    const float speed = clamp(0.04 / max(dist * dist, 1e-4), 0.08, 2.5);
+    float speed = clamp(0.04 / max(dist * dist, 1e-4), 0.08, 2.5);
+    if (inJar)
+        speed = min(speed, 0.25);
     const float spin = HashToUnit(PcgHash(q.seed ^ 0x7A3D9E21u)) * 2.0 - 1.0;
-    const float3 desired = dir * speed + cross(fwd, dir) * (spin * 0.15 * speed);
-    q.velocity = lerp(q.velocity, desired, 1.0 - exp(-4.0 * dt));
+    const float3 desired = dir * speed + cross(fwd, dir) * (inJar ? 0.0 : spin * 0.15 * speed);
+    q.velocity = lerp(q.velocity, desired, 1.0 - exp(-(inJar ? 8.0 : 4.0) * dt));
 
-    const float3 prev = q.position;
     q.position += q.velocity * dt;
     q.age += dt;
-    if (dist < max(0.02, length(q.velocity) * dt * 1.5) || q.age > 2.5)
+    if ((inJar && dist < max(0.004, length(q.velocity) * dt * 1.5)) || q.age > 4.0)
     {
-        q.age = -1.0;
+        q.age = -1.0; // settled: the jar contents take over
         u_Particles[dtid.x] = q;
         return;
     }
     u_Particles[dtid.x] = q;
 
-    // exactly the brightness the point had in the cloud (PointRaster): no pop at capture; the stream brightens
-    // only because points bunch up as they converge
+    // exactly the brightness the point had in the cloud (PointRaster), spread over a disc that grows as it nears
     const float intensity = g_Frame.tintAndScale.w * PointBrightness(q.seed) * g_Frame.fixedScale;
-    [unroll]
-    for (uint i = 0; i < STREAK_SAMPLES; i++)
-        DrawPoint(lerp(prev, q.position, (float(i) + 0.5) / STREAK_SAMPLES), g_Frame.tintAndScale.rgb, intensity / STREAK_SAMPLES, q.seed ^ i);
+    DrawSplat(q.position, g_Frame.tintAndScale.rgb, intensity, q.seed, g_Frame.motionParams.w);
 }
 
-// Jar contents fill from the bottom with the collected total; a dim outline shows the glass.
+// Jar contents fill from the bottom with the collected total; sparse brighter points draw the glass.
 [numthreads(POINT_PARTICLE_GROUP, 1, 1)]
 void main_jar(uint3 dtid : SV_DispatchThreadID)
 {
@@ -171,7 +223,7 @@ void main_jar(uint3 dtid : SV_DispatchThreadID)
     const float t = g_Frame.motionParams.x;
     if (i < POINT_JAR_POINTS)
     {
-        const float fill = saturate(float(u_Vacuum[0]) / max(g_Frame.vacuumParams.w, 1.0));
+        const float fill = JarFill();
         if (float(i) >= fill * POINT_JAR_POINTS)
             return;
         // stratified heights: point i sits at the i-th slice, so the contents rise from the bottom
@@ -185,18 +237,28 @@ void main_jar(uint3 dtid : SV_DispatchThreadID)
     else if (i < POINT_JAR_POINTS + POINT_JAR_OUTLINE)
     {
         const uint k = i - POINT_JAR_POINTS;
+        const float3 glass = float3(0.7, 0.85, 1.0);
         float3 p;
-        if (k < 768) // top and bottom rims
+        float strength;
+        if (k < 2048) // top and bottom rims
         {
-            const float angle = float(k % 384) / 384.0 * 6.2831853;
-            p = jar.bottom + jar.axis * (k < 384 ? jar.height : 0.0) + (jar.right * cos(angle) + jar.back * sin(angle)) * jar.radius;
+            const float angle = float(k % 1024) / 1024.0 * 6.2831853;
+            p = jar.bottom + jar.axis * (k < 1024 ? jar.height : 0.0) + (jar.right * cos(angle) + jar.back * sin(angle)) * jar.radius;
+            strength = 0.5;
         }
-        else // four side edges
+        else if (k < 4096) // eight side edges
         {
-            const uint e = (k - 768) / 64;
-            const float angle = float(e) * 1.5707963 + 0.7853982;
-            p = jar.bottom + jar.axis * (float((k - 768) % 64) / 63.0 * jar.height) + (jar.right * cos(angle) + jar.back * sin(angle)) * jar.radius;
+            const uint e = (k - 2048) / 256;
+            const float angle = float(e) * 0.7853982 + 0.3926991;
+            p = jar.bottom + jar.axis * (float((k - 2048) % 256) / 255.0 * jar.height) + (jar.right * cos(angle) + jar.back * sin(angle)) * jar.radius;
+            strength = 0.25;
         }
-        DrawPoint(p, float3(0.7, 0.85, 1.0), g_Frame.vacuumParams.z * 0.05, h);
+        else // a faint random scatter over the glass surface
+        {
+            const float angle = HashToUnit(PcgHash(h ^ 0xA54FF53Au)) * 6.2831853;
+            p = jar.bottom + jar.axis * (HashToUnit(PcgHash(h ^ 0x510E527Fu)) * jar.height) + (jar.right * cos(angle) + jar.back * sin(angle)) * jar.radius;
+            strength = 0.12;
+        }
+        DrawSplat(p, glass, g_Frame.vacuumParams.z * strength, h, 0.0004);
     }
 }

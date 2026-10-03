@@ -59,6 +59,7 @@ namespace shatter
         float vacuumConeDeg = 30.f;         // half-angle around the view axis
         float vacuumRate = 3.0e6f;          // captured points per second while enough points are in reach
         float particleBrightness = 0.6f;    // exposed value of a particle 0.5 m away
+        float particleRadius = 0.0003f;     // m: moving particles are drawn as soft discs that grow as they approach
         float jarCapacity = 1.0e9f;         // collected points that fill the jar (a whole cloud)
         bool  stackClouds = true;           // clouds share one center and density shape (one cloud past kMaxPointsPerCloud)
         bool  showHud = false;
