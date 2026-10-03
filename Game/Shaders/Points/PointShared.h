@@ -12,7 +12,7 @@
 #define POINT_COMPOSITE_TILE        8
 #define POINT_PARTICLE_CAPACITY     8388608 // vacuum particles (ring, 256 MB); must outlast vacuumRate * max particle age
 #define POINT_JAR_POINTS            65536   // points that draw the jar's contents
-#define POINT_JAR_OUTLINE           1024    // points that draw the jar's rims and edges
+#define POINT_JAR_OUTLINE           16384   // points that draw the jar's glass: rims, edges, and a faint surface
 #define POINT_PARTICLE_GROUP        256
 
 #define POINT_FLAG_AGGREGATE        0x80000000u // visible entry: batch is small on screen, pre-aggregate in the wave
