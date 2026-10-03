@@ -35,6 +35,46 @@ RWStructuredBuffer<uint64_t>    u_Accum         : register(u0);
 
 #define NO_PIXEL 0xFFFFFFFFu
 
+// Visual motion only (demo): collection and capture use the rest positions.
+//  - drift: a slow, smooth current (a few sines of position and time, so neighbours move together) plus a small
+//    per-point wander
+//  - pull: while vacuuming, points within reach in front of the camera lean toward the nozzle and spiral slightly
+//    around the view axis; a faint ripple travels inward along the funnel
+float3 AnimatePoint(float3 p, uint h)
+{
+    const float t = g_Frame.motionParams.x;
+    const float amp = g_Frame.motionParams.y;
+    const float3 q = p * 4.0;
+    float3 drift;
+    drift.x = sin(q.y + t * 0.37) + sin(q.z * 1.3 - t * 0.23);
+    drift.y = sin(q.z + t * 0.31) + sin(q.x * 1.7 + t * 0.29);
+    drift.z = sin(q.x + t * 0.41) + sin(q.y * 1.1 - t * 0.33);
+    const float phase = HashToUnit(PcgHash(h ^ 0x3C6EF372u)) * 6.2831853;
+    const float3 wander = float3(sin(t * 0.9 + phase), cos(t * 0.7 + phase * 1.3), sin(t * 0.8 + phase * 0.7));
+    p += drift * (0.5 * amp) + wander * (0.35 * amp);
+
+    const float pull = g_Frame.motionParams.w;
+    if (pull > 0.0)
+    {
+        const float3 cam = g_Frame.cameraPosAndNear.xyz;
+        const float3 fwd = g_Frame.vacuumDirAndCos.xyz;
+        const float3 nozzle = cam + fwd * 0.4 - g_Frame.vacuumUpAndRadius.xyz * 0.15;
+        const float3 v = nozzle - p;
+        const float dist = length(v);
+        const float reach = g_Frame.motionParams.z;
+        if (dist < reach)
+        {
+            const float3 fromCam = p - cam;
+            const float front = saturate(dot(fromCam, fwd) / max(length(fromCam), 1e-4));
+            const float falloff = (1.0 - dist / reach) * (1.0 - dist / reach);
+            const float ripple = 0.85 + 0.15 * sin(dist * 25.0 + t * 8.0); // crests travel toward the nozzle
+            const float w = pull * falloff * front * ripple;
+            p += v * w + cross(fwd, v) * (w * 0.5);
+        }
+    }
+    return p;
+}
+
 uint HighestLane(uint4 mask)
 {
     if (mask.w != 0) return 96 + firstbithigh(mask.w);
@@ -104,7 +144,7 @@ void main(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
             const uint h = PcgHash(index ^ g_Frame.cloudSeed);
 
             // dither inside the quantization cell so the 11/11/10-bit lattice never shows
-            const float3 p = b.aabbMin + (UnpackPointQuantized(t_Positions[index]) + HashToUnit3(PcgHash(h ^ 0x68E31DA4u))) * quantum;
+            const float3 p = AnimatePoint(b.aabbMin + (UnpackPointQuantized(t_Positions[index]) + HashToUnit3(PcgHash(h ^ 0x68E31DA4u))) * quantum, h);
             const float4 clip = mul(float4(p, 1.0), g_Frame.worldToClip);
 
             if (!collected && clip.w > zNear)

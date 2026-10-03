@@ -60,6 +60,9 @@ namespace shatter
         float vacuumRate = 300.f;           // captured points per second while enough points are in reach
         float particleBrightness = 4.f;     // exposed value of a particle 0.5 m away
         bool  showHud = false;
+        float driftAmplitude = 0.005f;      // m, slow coherent current through every cloud
+        float pullRadius = 1.2f;            // m, points inside are drawn toward the nozzle while vacuuming (visual only)
+        float pullStrength = 0.1f;          // fraction of the distance to the nozzle at the closest points
         uint64_t statCollected = 0;         // total points vacuumed (lags a few frames)
 
         // stats (filled by PointCloudSystem, read by UI and bench JSON)
@@ -146,6 +149,8 @@ namespace shatter
         nvrhi::BufferHandle m_vacuum;                     // 4 x uint64: collected total, candidate weight, particle head, spare
         nvrhi::BufferHandle m_particles;                  // PointParticle x POINT_PARTICLE_CAPACITY
         bool m_vacuumCleared = false;
+        double m_time = 0.0;
+        float m_pullEase = 0.f;
         double m_vacuumWeight = 0.0;                      // last read candidate weight (closeness-weighted points in reach)
 
         nvrhi::BufferHandle m_generateConstants;
