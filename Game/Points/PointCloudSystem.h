@@ -32,7 +32,7 @@ namespace shatter
         int   totalMillions = 1000;         // points across all clouds
         int   cloudCount = 4;               // raised automatically so no cloud exceeds kMaxPointsPerCloud
         float cloudRadius = 0.75f;          // m
-        float cloudDistance = 3.0f;         // m in front of the anchor camera
+        float cloudDistance = 6.0f;         // m in front of the anchor camera
         int   gridLog2 = 7;                 // density grid resolution (1 << gridLog2)^3
         float warp = 0.6f;
         float noiseFrequency = 1.5f;

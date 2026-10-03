@@ -18,7 +18,7 @@
           "radianceScale": [ 0, 0, 0 ],
           "textureIndex": [ 0 ],
           "rotation": [ 0 ],
-          "path": "==PROCEDURAL_SKY=="
+          "path": "EnvironmentMaps/shanghai_bund_4k_cube_bc6u.dds"
         }
       ]
     },
@@ -33,8 +33,8 @@
           "verticalFov": 1.04,
           "zNear": 0.001,
           "enableAutoExposure": false,
-          "exposureCompensation": 0.6,
-          "exposureValue": -1.0
+          "exposureCompensation": 0.0,
+          "exposureValue": 3.0
         }
       ]
     },
