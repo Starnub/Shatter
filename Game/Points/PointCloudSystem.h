@@ -29,9 +29,9 @@ namespace shatter
         bool  enabled = true;
 
         // generation (press Regenerate)
-        int   totalMillions = 1000;         // points across all clouds
-        int   cloudCount = 2;               // raised automatically so no cloud exceeds kMaxPointsPerCloud
-        float cloudRadius = 0.75f;          // m
+        int   totalMillions = 512;          // points across all clouds
+        int   cloudCount = 1;               // raised automatically so no cloud exceeds kMaxPointsPerCloud
+        float cloudRadius = 0.6f;           // m
         float cloudDistance = 6.0f;         // m in front of the anchor camera
         int   gridLog2 = 7;                 // density grid resolution (1 << gridLog2)^3
         float warp = 0.6f;
