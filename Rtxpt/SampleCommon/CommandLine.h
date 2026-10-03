@@ -38,6 +38,7 @@ struct CommandLineOptions
     int frame = 64;                    // --frame N: frame (after scene load) at which --screenshot is taken
     // SHATTER: point clouds (M1); negative = keep the default
     bool noPoints = false;             // --noPoints
+    bool vacuum = false;               // --vacuum: test the vacuum without input (cloud edge 0.1 m from the camera)
     int pointsM = -1;                  // --pointsM N: total points in millions
     int pointClouds = -1;              // --pointClouds N
     int pointAtomic = -1;              // --pointAtomic 0|1: 0 int64 fixed point, 1 NVAPI fp16x4

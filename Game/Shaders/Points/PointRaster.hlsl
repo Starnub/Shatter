@@ -35,24 +35,6 @@ RWStructuredBuffer<uint64_t>    u_Accum         : register(u0);
 
 #define NO_PIXEL 0xFFFFFFFFu
 
-// Visual motion only (demo): collection and capture use the rest positions.
-//  - drift: a slow, smooth current (a few sines of position and time, so neighbours move together) plus a small
-//    per-point wander
-float3 AnimatePoint(float3 p, uint h)
-{
-    const float t = g_Frame.motionParams.x;
-    const float amp = g_Frame.motionParams.y;
-    const float3 q = p * 4.0;
-    float3 drift;
-    drift.x = sin(q.y + t * 0.37) + sin(q.z * 1.3 - t * 0.23);
-    drift.y = sin(q.z + t * 0.31) + sin(q.x * 1.7 + t * 0.29);
-    drift.z = sin(q.x + t * 0.41) + sin(q.y * 1.1 - t * 0.33);
-    const float phase = HashToUnit(PcgHash(h ^ 0x3C6EF372u)) * 6.2831853;
-    const float3 wander = float3(sin(t * 0.9 + phase), cos(t * 0.7 + phase * 1.3), sin(t * 0.8 + phase * 0.7));
-    p += drift * (0.5 * amp) + wander * (0.35 * amp);
-
-    return p;
-}
 
 uint HighestLane(uint4 mask)
 {
@@ -123,7 +105,7 @@ void main(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
             const uint h = PcgHash(index ^ g_Frame.cloudSeed);
 
             // dither inside the quantization cell so the 11/11/10-bit lattice never shows
-            const float3 p = AnimatePoint(b.aabbMin + (UnpackPointQuantized(t_Positions[index]) + HashToUnit3(PcgHash(h ^ 0x68E31DA4u))) * quantum, h);
+            const float3 p = DriftPoint(b.aabbMin + (UnpackPointQuantized(t_Positions[index]) + HashToUnit3(PcgHash(h ^ 0x68E31DA4u))) * quantum, h, g_Frame.motionParams.x, g_Frame.motionParams.y);
             const float4 clip = mul(float4(p, 1.0), g_Frame.worldToClip);
 
             if (!collected && clip.w > zNear)
@@ -142,7 +124,7 @@ void main(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
                         const float distance2 = max(dot(d, d), minDistance2);
 
                         // placeholder shading: log-uniform brightness spread (0.25x..4x) around the tint
-                        const float brightness = exp2(HashToUnit(PcgHash(h ^ 0xB5297A4Du)) * 4.0 - 2.0) * 0.5411; // mean 1
+                        const float brightness = PointBrightness(h);
                         const float3 radiance = g_Frame.tintAndScale.rgb * (brightness * scale / distance2);
 
                         const float dither = HashToUnit(PcgHash(h ^ (g_Frame.frameIndex * 0x9E3779B9u)));

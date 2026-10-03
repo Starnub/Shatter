@@ -10,7 +10,7 @@
 #define POINT_DISPATCH_ROW          32768   // 2D dispatches: linear group = y * POINT_DISPATCH_ROW + x
 #define POINT_CULL_GROUP_SIZE       128
 #define POINT_COMPOSITE_TILE        8
-#define POINT_PARTICLE_CAPACITY     262144  // vacuum particles (ring)
+#define POINT_PARTICLE_CAPACITY     8388608 // vacuum particles (ring, 256 MB); must outlast vacuumRate * max particle age
 #define POINT_JAR_POINTS            65536   // points that draw the jar's contents
 #define POINT_JAR_OUTLINE           1024    // points that draw the jar's rims and edges
 #define POINT_PARTICLE_GROUP        256

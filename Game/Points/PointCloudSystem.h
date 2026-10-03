@@ -57,9 +57,9 @@ namespace shatter
         bool  vacuumActive = false;         // input held (set by Sample each frame)
         float vacuumRadius = 0.5f;          // m
         float vacuumConeDeg = 30.f;         // half-angle around the view axis
-        float vacuumRate = 20000.f;         // captured points per second while enough points are in reach
+        float vacuumRate = 3.0e6f;          // captured points per second while enough points are in reach
         float particleBrightness = 0.6f;    // exposed value of a particle 0.5 m away
-        float jarCapacity = 5.0e6f;         // collected points that fill the jar
+        float jarCapacity = 1.0e9f;         // collected points that fill the jar (a whole cloud)
         bool  stackClouds = true;           // clouds share one center and density shape (one cloud past kMaxPointsPerCloud)
         bool  showHud = false;
         float driftAmplitude = 0.005f;      // m, slow coherent current through every cloud

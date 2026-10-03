@@ -46,6 +46,7 @@ bool CommandLineOptions::InitFromCommandLine(int _argc, char const* const* _argv
             ("fg", "SHATTER: initial frame generation item: 0 off, 1 2x, 2 3x, 3 4x, 4 5x, 5 6x, 6 Dynamic", value(fg))
             ("frame", "SHATTER: with --screenshot, the frame after scene load to capture (default 64)", value(frame))
             ("noPoints", "SHATTER: disable the point clouds", value(noPoints))
+            ("vacuum", "SHATTER: test: vacuum held from the start, cloud placed at the camera", value(vacuum))
             ("pointsM", "SHATTER: total points in millions (default 1000)", value(pointsM))
             ("pointClouds", "SHATTER: number of clouds (default 4; raised so no cloud exceeds 512M points)", value(pointClouds))
             ("pointAtomic", "SHATTER: point accumulation: 0 int64 fixed point (default), 1 NVAPI fp16x4", value(pointAtomic))

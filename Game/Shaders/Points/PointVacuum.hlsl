@@ -51,7 +51,9 @@ void main_capture(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
         const float dist = length(d);
         if (dist >= radius || dot(d, fwd) < cosCone * dist)
             continue;
-        const float w = 1.0 - dist / radius; // closer points are favoured
+        // soft falloff in distance and angle: no hard edge, so the crater has no cookie-cutter wall
+        const float radial = 1.0 - dist / radius;
+        const float w = radial * radial * radial * smoothstep(cosCone, 1.0, dot(d, fwd) / max(dist, 1e-5));
         weightSum += uint(w * 256.0 + 0.5);
         const float u = HashToUnit(PcgHash(h ^ (g_Frame.frameIndex * 0x9E3779B9u) ^ 0x2C1B3C6Du));
         if (u >= captureScale * w)
@@ -64,7 +66,7 @@ void main_capture(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
         uint64_t slot;
         InterlockedAdd(u_Vacuum[2], (uint64_t)1, slot);
         PointParticle q;
-        q.position = p;
+        q.position = DriftPoint(p, h, g_Frame.motionParams.x, g_Frame.motionParams.y); // exactly where the raster drew it
         q.age = 0.0;
         q.velocity = 0.0; // leaves the cloud from rest
         q.seed = h;
@@ -80,7 +82,7 @@ void main_capture(uint3 groupId : SV_GroupID, uint tid : SV_GroupIndex)
     }
 }
 
-#define STREAK_SAMPLES 4
+#define STREAK_SAMPLES 2
 
 // The jar: held in the lower right of the view, axis along the view's up. Particles fly into its mouth.
 struct Jar { float3 bottom; float3 axis; float3 right; float3 back; float height; float radius; };
@@ -131,18 +133,19 @@ void main_particles(uint3 dtid : SV_DispatchThreadID)
     const Jar jar = GetJar();
     const float3 mouth = jar.bottom + jar.axis * jar.height;
 
+    // sink flow: speed ~ 1/d^2 (slow far away, fast near the mouth), reached with a little inertia
     const float3 to = mouth - q.position;
     const float dist = length(to);
     const float3 dir = to / max(dist, 1e-4);
+    const float speed = clamp(0.04 / max(dist * dist, 1e-4), 0.08, 2.5);
     const float spin = HashToUnit(PcgHash(q.seed ^ 0x7A3D9E21u)) * 2.0 - 1.0;
-    const float3 swirl = cross(fwd, dir) * (spin * 0.6 * saturate(dist * 2.0));
-    const float3 desired = dir * (0.3 + 1.5 * dist) + swirl;
-    q.velocity = lerp(q.velocity, desired, 1.0 - exp(-2.5 * dt)); // gentle acceleration from rest
+    const float3 desired = dir * speed + cross(fwd, dir) * (spin * 0.15 * speed);
+    q.velocity = lerp(q.velocity, desired, 1.0 - exp(-4.0 * dt));
 
     const float3 prev = q.position;
     q.position += q.velocity * dt;
     q.age += dt;
-    if (dist < 0.02 || q.age > 5.0)
+    if (dist < max(0.02, length(q.velocity) * dt * 1.5) || q.age > 2.5)
     {
         q.age = -1.0;
         u_Particles[dtid.x] = q;
@@ -150,12 +153,12 @@ void main_particles(uint3 dtid : SV_DispatchThreadID)
     }
     u_Particles[dtid.x] = q;
 
-    // fades in over 0.3 s so the stream grows out of the cloud
-    const float fade = smoothstep(0.0, 0.3, q.age);
-    const float3 color = lerp(g_Frame.tintAndScale.rgb, HashToUnit3(PcgHash(q.seed ^ 0x51ED270Bu)) * 0.6 + 0.4, 0.5 * fade);
+    // exactly the brightness the point had in the cloud (PointRaster): no pop at capture; the stream brightens
+    // only because points bunch up as they converge
+    const float intensity = g_Frame.tintAndScale.w * PointBrightness(q.seed) * g_Frame.fixedScale;
     [unroll]
     for (uint i = 0; i < STREAK_SAMPLES; i++)
-        DrawPoint(lerp(prev, q.position, (float(i) + 0.5) / STREAK_SAMPLES), color, g_Frame.vacuumParams.z * fade / STREAK_SAMPLES, q.seed ^ i);
+        DrawPoint(lerp(prev, q.position, (float(i) + 0.5) / STREAK_SAMPLES), g_Frame.tintAndScale.rgb, intensity / STREAK_SAMPLES, q.seed ^ i);
 }
 
 // Jar contents fill from the bottom with the collected total; a dim outline shows the glass.

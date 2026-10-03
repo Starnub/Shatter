@@ -1962,6 +1962,7 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
         // SHATTER: point cloud settings from the command line (applied once)
         shatter::PointSettings& points = m_ui.Points;
         if (m_cmdLine.noPoints) points.enabled = false;
+        if (m_cmdLine.vacuum) points.cloudDistance = points.cloudRadius + 0.1f;
         if (m_cmdLine.pointsM > 0) points.totalMillions = m_cmdLine.pointsM;
         if (m_cmdLine.pointClouds > 0) points.cloudCount = m_cmdLine.pointClouds;
         if (m_cmdLine.pointAtomic >= 0) points.atomicMode = (m_cmdLine.pointAtomic == 1) ? shatter::PointAtomicMode::Fp16x4 : shatter::PointAtomicMode::Int64;
@@ -2299,7 +2300,7 @@ void Sample::Render(nvrhi::IFramebuffer* framebuffer)
             points.cameraDir = m_view->GetViewDirection();
             points.cameraUp = m_camera.GetUp();
             points.deltaTime = std::clamp(m_lastDeltaTime, 1e-4f, 0.1f);
-            m_ui.Points.vacuumActive = m_gameModeApplied && (m_vacuumMouseHeld || m_vacuumKeyHeld);
+            m_ui.Points.vacuumActive = m_cmdLine.vacuum || (m_gameModeApplied && (m_vacuumMouseHeld || m_vacuumKeyHeld));
             m_points->Render(m_commandList, points, m_ui.Points, &m_automation->Profiler());
         }
     }
