@@ -782,6 +782,7 @@ void Sample::ApplyGameMode()
     if (glfwRawMouseMotionSupported())
         glfwSetInputMode(window, GLFW_RAW_MOUSE_MOTION, want ? GLFW_TRUE : GLFW_FALSE);
     m_camera.MouseButtonUpdate(GLFW_MOUSE_BUTTON_LEFT, want ? GLFW_PRESS : GLFW_RELEASE, 0);
+    m_camera.SetRotateSpeed(want ? .0015f : .003f); // raw motion: half the desktop rate
     m_ui.ShowUI = !want;
 }
 

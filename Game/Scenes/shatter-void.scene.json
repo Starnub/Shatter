@@ -1,0 +1,49 @@
+{
+  "models": [
+    "Models/window/window.gltf"
+  ],
+  "graph": [
+    {
+      "name": "Placeholder (the TLAS needs one instance; far below and tiny)",
+      "model": 0,
+      "translation": [ 0.0, -100000.0, 0.0 ],
+      "scaling": 0.001
+    },
+    {
+      "name": "Lights",
+      "children": [
+        {
+          "name": "Sky",
+          "type": "EnvironmentLight",
+          "radianceScale": [ 0, 0, 0 ],
+          "textureIndex": [ 0 ],
+          "rotation": [ 0 ],
+          "path": "==PROCEDURAL_SKY=="
+        }
+      ]
+    },
+    {
+      "name": "Cameras",
+      "children": [
+        {
+          "name": "Default",
+          "type": "PerspectiveCameraEx",
+          "translation": [ 0.0, 0.0, 0.0 ],
+          "rotation": [ 0, 0, 0, 1 ],
+          "verticalFov": 1.04,
+          "zNear": 0.001,
+          "enableAutoExposure": false,
+          "exposureCompensation": 0.6,
+          "exposureValue": -1.0
+        }
+      ]
+    },
+    {
+      "name": "SampleSettings",
+      "type": "SampleSettings",
+      "realtimeMode": true,
+      "enableAnimations": true,
+      "startingCamera": -1
+    }
+  ]
+}

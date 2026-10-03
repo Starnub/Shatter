@@ -7,6 +7,8 @@ Set-Location $root
 $branch = git rev-parse --abbrev-ref HEAD
 git pull -q origin $branch 2>&1 | Out-Host
 git log --oneline -1
+# Shatter scenes live in Game/Scenes; Assets is NVIDIA's submodule, so install them there.
+Copy-Item (Join-Path $root 'Game\Scenes\*.scene.json') (Join-Path $root 'Assets') -Force
 if ($Configure) { cmake -S . -B build 2>&1 | Select-String -Pattern 'Error|error' | ForEach-Object { $_.Line } }
 $log = cmake --build build --config Release --parallel 2>&1
 $code = $LASTEXITCODE
